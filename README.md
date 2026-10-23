@@ -20,6 +20,16 @@
 
 ## Latest updates
 
+### 1.2.0 &mdash; Sprint planning is a real hub
+
+**Boards > Sprint planning** now works on your project, next to the Work Map:
+
+- **Reads** the team's sprints, members, capacity per day and days off (plus team days off), and the work items &mdash; with points, remaining work, description and acceptance criteria.
+- **Partial days off** (half a day, a few hours), which Azure DevOps can't store, are kept in the extension's own data storage for the team, so everyone sees them.
+- **Save plan** writes the plan back: stories' sprint, owner and points; the new **Validation** / **Assisting team member** tasks, linked to their stories; and capacity and days off. It shows what will change first, never overwrites a story someone else changed meanwhile, and keeps anything that didn't save so you can try again.
+- **Open in Azure DevOps** opens the real work item form from the planning view.
+- New permission: **Work items (read & write)**, used only by Save plan. The Work Map still only reads.
+
 ### Split into its own repo
 
 - The Azure DevOps extension now lives here, with its history from ado-work-map. The PowerShell script and VS Code extension stay in [ado-work-map](https://github.com/DasCondor/ado-work-map).
@@ -45,13 +55,13 @@ Epics, features, stories and tasks, every sprint, what changed, and how the work
 </tr>
 </table>
 
-### Sprint planning (preview)
+### Sprint planning
 
-Sprint planning run as a guided team meeting: capacity check-in (hours per day, full / half / partial days off, team holidays, 1&ndash;5 week sprints), carry over, planning poker with the full story in a work item form, people lanes or swimlanes with assigned work against capacity, quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote.
+Sprint planning run as a guided team meeting on your real sprints and work items: capacity check-in (hours per day, full / half / partial days off, team holidays, 1&ndash;5 week sprints), carry over, planning poker with the full story in a work item form, people lanes or swimlanes with assigned work against capacity, quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote.
 
 <img src="docs/images/sprint-planning.png" alt="Sprint planning: capacity check-in with time off per day for a 4-week sprint" width="900">
 
-Today this is a demo on sample data. It's being built into a real hub that reads your project and saves the plan back.
+It reads the team's capacity and days off from Azure DevOps and **Save plan** writes the plan back (sprint, owner and points of stories, new tasks, capacity and days off). The [live demo](https://dascondor.github.io/ado-work-map-extension/sprint-planning.html) runs the same page on sample data.
 
 ## Install
 
@@ -59,7 +69,7 @@ The extension is published privately on the Visual Studio Marketplace and shared
 
 To publish it under your own publisher: change `publisher` in `azure-devops-extension/vss-extension.json`, build it (below), and upload the `.vsix` at [marketplace.visualstudio.com/manage](https://marketplace.visualstudio.com/manage).
 
-**Permissions** (all read-only today): Work items, Code, Project and team, Analytics. It reads PR metadata and commit dates and authors &mdash; never file contents or diffs &mdash; and there's no server behind it: data stays in Azure DevOps and the user's browser. When Sprint planning can save back, it will add **Work items (read & write)**, which admins will see when approving the update.
+**Permissions:** Work items (read & write), Code, Project and team, Analytics (read). Only **Save plan** in Sprint planning writes &mdash; stories' sprint, owner and points, new tasks, and team capacity and days off; the Work Map only reads. It reads PR metadata and commit dates and authors &mdash; never file contents or diffs &mdash; and there's no server behind it: data stays in Azure DevOps and the user's browser.
 
 Azure DevOps Services only (not Azure DevOps Server).
 
@@ -82,7 +92,8 @@ Azure DevOps Services only (not Azure DevOps Server).
 
 ## Security and privacy
 
-- Reads with the signed-in person's own access; never writes to Azure DevOps (until save-back arrives, and then only when someone clicks **Save plan**).
+- Reads with the signed-in person's own access, and writes only when someone clicks **Save plan** &mdash; after showing what will change, and never over a story someone else changed meanwhile.
+- Work item text (descriptions, acceptance criteria) is cleaned before it's shown: only plain formatting and `https` links are kept.
 - No server, no telemetry, no outside scripts: the Azure DevOps SDK is bundled, and the live demo pages run under a strict content security policy that blocks loading or sending anything.
 - Not affiliated with Microsoft.
 

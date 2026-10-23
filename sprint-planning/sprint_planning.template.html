@@ -49,6 +49,13 @@ body{overflow:hidden}
 .adonav .sub-ni a.on{background:var(--sel);font-weight:600;box-shadow:inset 3px 0 0 var(--accent)}
 .adonav .grow{flex:1}
 .hub{overflow:auto;background:var(--bg)}
+.real #splenlbl,.real #simulate,.real #simfist{display:none}
+.acx{font-size:13.5px;line-height:1.5} .acx ul,.acx ol{padding-left:22px;margin:4px 0}
+.savebox{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:24px}
+.savebox[hidden]{display:none}
+.savebox .in{background:var(--panel);color:var(--text);border-radius:6px;max-width:560px;width:100%;padding:18px 22px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.savebox ul{margin:8px 0 12px;padding-left:20px} .savebox .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.savebox .err{color:var(--bad);font-size:12.5px;max-height:200px;overflow:auto}
 .embedded .notice,.embedded .adoh,.embedded .adonav{display:none}
 .embedded .shell,.embedded .shell.navmin{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .adoh button.hicon{background:none;border:0;font:inherit;cursor:pointer}
@@ -327,7 +334,8 @@ section.view{display:none} section.view.on{display:block}
   <div><h1 id="title">Sprint planning</h1><div class="sub" id="meta"></div></div>
   <span class="grow"></span>
   <label class="sub">Sprint <select id="sprint"></select></label>
-  <label class="sub" title="Demo only: stretch this sprint to see longer sprints. Later sprints move along with it.">Length <select id="splen"><option value="1">1 week</option><option value="2">2 weeks</option><option value="3">3 weeks</option><option value="4">4 weeks</option><option value="5">5 weeks</option></select></label>
+  <label class="sub" id="splenlbl" title="Demo only: stretch this sprint to see longer sprints. Later sprints move along with it.">Length <select id="splen"><option value="1">1 week</option><option value="2">2 weeks</option><option value="3">3 weeks</option><option value="4">4 weeks</option><option value="5">5 weeks</option></select></label>
+  <button class="btn primary" id="saveplan" hidden title="Write the plan's changes to Azure DevOps">Save plan</button>
   <button class="btn" id="export">Export changes (CSV)</button>
   <button class="btn" id="reset">Start over</button>
   <label class="sub">Theme <select id="theme"><option value="auto">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
@@ -390,13 +398,17 @@ section.view{display:none} section.view.on{display:block}
 </main>
 </div></div>
 <div class="modal" id="modal" hidden><div class="mbox" id="mbox" role="dialog" aria-modal="true"></div></div>
+<div class="savebox" id="savebox" hidden><div class="in" id="saveinner" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
 <canvas id="confetti"></canvas>
 <script>
 const D = __DATA__;
+// REAL: running as the Sprint planning hub inside Azure DevOps (live data, Save plan). Otherwise the live demo.
+const REAL = !!D.real, PAPI = window.PLANNING_API || null;
+if (REAL) document.documentElement.classList.add('real');
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const KEY = 'adomap.planning2.' + D.project;
+const KEY = 'adomap.planning2.' + D.project + (D.teamId ? '.' + D.teamId : '');
 const load = (k, d) => { try { const v = localStorage.getItem(KEY + '.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 const save = (k, v) => { try { localStorage.setItem(KEY + '.' + k, JSON.stringify(v)); } catch (e) {} };
 const toast = msg => { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2800); };
@@ -413,6 +425,7 @@ const isStory = it => ['User Story', 'Product Backlog Item', 'Requirement', 'Bug
 
 // Extra sample backlog items (with tasks) so the demo has plenty to plan; seeded so they're the same every time
 (function addSamples() {
+  if (REAL) return;
   let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const features = D.items.filter(i => i.type === 'Feature');
   const people = [...new Set(D.items.map(i => i.assignee).filter(Boolean))];
@@ -451,8 +464,9 @@ const DAY = 864e5, isoDay = t => new Date(t).toISOString().slice(0, 10) + 'T00:0
 const weeksOf = i => Math.max(1, Math.round((Date.parse(ORIG[i].finish) - Date.parse(ORIG[i].start) + 3 * DAY) / (7 * DAY)));
 // Example sprint for the demo: Oct 26 - Nov 20, 2026 (4 weeks)
 const EX_START = '2026-10-26', EX_WEEKS = 4;
-const EX = (() => { const i = ORIG.findIndex(o => String(o.start).slice(0, 10) === EX_START); return i >= 0 ? i : SPR.findIndex(s => s.timeFrame === 'future'); })();
+const EX = REAL ? -1 : (() => { const i = ORIG.findIndex(o => String(o.start).slice(0, 10) === EX_START); return i >= 0 ? i : SPR.findIndex(s => s.timeFrame === 'future'); })();
 function applyLengths() {
+  if (REAL) return;   // real sprints keep their own dates
   const L = load('len', null) || (EX >= 0 ? {[EX]: EX_WEEKS} : {});
   let shift = 0;
   SPR.forEach((s, i) => {
@@ -463,7 +477,10 @@ function applyLengths() {
 }
 applyLengths();
 const curIdx = SPR.findIndex(s => s.timeFrame === 'current');
-const people = [...new Set(D.items.filter(i => i.type !== 'Epic' && i.type !== 'Feature').map(i => i.assignee).filter(Boolean))].sort();
+const people = REAL
+  // team members, plus anyone else who owns work in the current or upcoming sprints
+  ? [...new Set(D.people.map(p => p.name).concat(D.items.filter(i => i.assignee && (i.sp < 0 || i.sp >= SPR.findIndex(s => s.timeFrame !== 'past')) && i.bucket !== 'done').map(i => i.assignee)))].sort()
+  : [...new Set(D.items.filter(i => i.type !== 'Epic' && i.type !== 'Feature').map(i => i.assignee).filter(Boolean))].sort();
 const needs = new Map();   // "to" needs "from" first (successor links)
 D.graph.edges.filter(e => e.kind === 'depends').forEach(e => { const to = +e.to.slice(1); if (!needs.has(to)) needs.set(to, []); needs.get(to).push(+e.from.slice(1)); });
 const tasksOf = st => (st.children || []).map(id => byId.get(id)).filter(t => t && t.type === 'Task' && t.bucket !== 'done' && t.bucket !== 'removed');
@@ -473,7 +490,7 @@ let target = load('target', SPR.findIndex(s => s.timeFrame === 'future'));
 if (!(target >= 0 && target < SPR.length)) target = Math.max(0, curIdx);
 let P = load('plan', {});      // story id -> {sp, who}
 let E = load('est', {});       // story id -> points agreed in poker
-let C = load('cap', null) || exampleCap();
+let C = load('cap', null) || (REAL ? JSON.parse(JSON.stringify(D.capacity || {})) : exampleCap());
 function exampleCap() {
   if (EX < 0 || String(SPR[EX].start).slice(0, 10) !== EX_START) return {};
   const [a, b, c, d, e] = people;   // Avery Chen, Jordan Patel, Riley Okafor, Sam Rivera, Taylor Brooks in the demo
@@ -508,7 +525,7 @@ const days = s => { const out = []; if (!s.start || !s.finish) return out;
   for (let d = Date.parse(s.start.slice(0, 10) + 'T00:00:00Z'); d <= Date.parse(s.finish.slice(0, 10) + 'T00:00:00Z'); d += 864e5) { const w = new Date(d).getUTCDay(); if (w && w < 6) out.push(new Date(d).toISOString().slice(0, 10)); }
   return out; };
 const capOf = (sp = target) => (C[sp] = C[sp] || {hpd: {}, off: {}, team: {}});
-const hpdOf = (who, sp = target) => { const v = capOf(sp).hpd[who]; return v == null ? 6 : v; };
+const hpdOf = (who, sp = target) => { const v = capOf(sp).hpd[who]; return v == null ? (REAL ? 0 : 6) : v; };
 function capacity(who, sp = target) {
   const c = capOf(sp), hpd = hpdOf(who, sp), ds = days(SPR[sp]);
   let off = 0; ds.forEach(d => { off += Math.max(offHours((c.off[who] || {})[d], hpd), offHours(c.team[d], hpd)); });
@@ -632,7 +649,7 @@ function renderCalendar(el) {
     const first = new Date(wk[0] + 'T00:00:00Z').getUTCDay(), pads = '<div class="cday pad"></div>'.repeat(Math.max(0, first - 1));
     const end = 5 - (first - 1) - wk.length, wh = wk.reduce((a, d) => a + day(d).h, 0);
     return `<div class="wl">Week ${i + 1}<span class="sub" style="font-weight:400">${fmtDate(wk[0])}</span></div>${pads}${wk.map(d => { const x = day(d), pct = full ? x.h / full : 0, dt = new Date(d + 'T00:00:00Z');
-      const cls = !x.h ? ' none' : pct < .6 ? ' low' : '', fin = doneIdx >= 0 && ds[doneIdx] === d;
+      const cls = !x.h ? ' none' : pct < .6 ? ' low' : '', fin = totalWork > 0 && doneIdx >= 0 && ds[doneIdx] === d;
       return `<div class="cday${cls}${d === today ? ' today' : ''}" style="--a:${pct.toFixed(2)}" title="${esc(fmtDate(d))}: ${h1(x.h)} of ${h1(full)} team hours${x.offs.length ? '\nOff: ' + x.offs.map(o => o[0] + ' ' + o[1]).join(', ') : ''}">
         <div class="dn"><b>${dt.getUTCDate()}</b><span class="sub">${dt.toLocaleDateString(undefined, {month: 'short', timeZone: 'UTC'})}</span></div>
         <div class="hrs">${h1(x.h)} h${fin ? ' &middot; <b style="color:var(--ok)">&#127937; done</b>' : ''}</div><div class="mini"><i style="width:${Math.round(pct * 100)}%"></i></div>
@@ -707,6 +724,7 @@ const SPECIFIC = {
 const ROLES = ['customer', 'support agent', 'team admin', 'field engineer', 'finance user'];
 const WHY = ['I can finish my work without calling support', 'mistakes are caught before they reach customers', 'I spend less time on manual steps', 'the data I rely on stays accurate', 'it works the way I expect'];
 function detailsOf(it) {
+  if (REAL) return {story: it.descHtml || '<span class="sub">No description.</span>', acHtml: it.acHtml || '<span class="sub">No acceptance criteria.</span>'};
   const h = it.id % 5, title = it.title.replace(/ part \d+$/i, '');
   const specific = SPECIFIC[it.title] || [`a signed-in ${ROLES[h]}, when they use "${title.toLowerCase()}", then it completes without errors`];
   return {
@@ -721,8 +739,8 @@ function storyHtml(it, big) {
   const d = detailsOf(it), f = ancestor(it, 1), ep = ancestor(it, 0), ts = tasksOf(it), deps = (needs.get(it.id) || []).map(id => byId.get(id)).filter(Boolean);
   const hrs = ts.reduce((a, t) => a + (+t.remaining || 0), 0), pl = planned(it);
   return `<div class="us">${d.story}</div>
-    <div class="sect">Acceptance criteria <span class="sample">sample text in this demo</span></div>
-    <ol class="ac">${d.ac.map(a => `<li>${a}</li>`).join('')}</ol>
+    <div class="sect">Acceptance criteria${REAL ? '' : ' <span class="sample">sample text in this demo</span>'}</div>
+    ${d.acHtml != null ? `<div class="acx">${d.acHtml}</div>` : `<ol class="ac">${d.ac.map(a => `<li>${a}</li>`).join('')}</ol>`}
     <div class="sect">Details</div>
     <div class="sdet"><div><span>Type</span>${esc(it.type)}</div><div><span>State</span>${esc(it.state)}</div><div><span>Owner</span>${esc(pl.who || 'Unassigned')}</div>
       <div><span>Feature</span>${esc(f ? f.title : '-')}</div><div><span>Epic</span>${esc(ep ? ep.title : '-')}</div><div><span>Area</span>${esc(it.area || '-')}</div>
@@ -768,32 +786,32 @@ function formHtml(it, meeting) {
   return `${meeting || ''}
   <div class="wif-head" style="--c:${TYPE_COLOR[it.type] || '#009ccc'}">
     <div class="wif-type"><span class="ico"></span>${esc(it.type.toUpperCase())} ${it.id}
-      <span class="wif-tools"><button class="btn" disabled title="Demo - nothing is saved to Azure DevOps">Save &amp; Close</button><button class="btn" id="popclose" title="Close (Esc)">&times;</button></span></div>
+      <span class="wif-tools">${REAL ? `<button class="btn" data-adoopen="${it.id}" title="Open the work item form in Azure DevOps">Open in Azure DevOps &#8599;</button>` : '<button class="btn" disabled title="Demo - nothing is saved to Azure DevOps">Save &amp; Close</button>'}<button class="btn" id="popclose" title="Close (Esc)">&times;</button></span></div>
     <div class="wif-title">${esc(it.title)}</div>
-    <div class="wif-who">${av(who, 'sm')}<span>${esc(who || 'Unassigned')}</span><span class="sub">&#128172; 0 comments</span>${it.tags ? `<span>${esc(it.tags)}</span>` : '<span class="tagadd">+ Add tag</span>'}${it.sample ? '<span class="tag new">sample</span>' : ''}</div>
+    <div class="wif-who">${av(who, 'sm')}<span>${esc(who || 'Unassigned')}</span>${REAL ? '' : '<span class="sub">&#128172; 0 comments</span>'}${it.tags ? `<span>${esc(it.tags)}</span>` : '<span class="tagadd">+ Add tag</span>'}${it.sample ? '<span class="tag new">sample</span>' : ''}</div>
   </div>
   <div class="wif-fields">
     <div class="wif-f"><span>State</span><b><span class="sdot" style="--sc:${stateColor(it.state)}"></span>${esc(it.state)}</b></div>
     <div class="wif-f"><span>Area</span><b title="${esc(it.area)}">${esc(it.area || D.project)}</b></div>
-    <div class="wif-f"><span>Reason</span><b>${esc(reason)}</b></div>
+    ${REAL ? `<div class="wif-f"><span>Points</span><b>${pts(it) == null ? 'Not estimated' : pts(it)}</b></div>` : `<div class="wif-f"><span>Reason</span><b>${esc(reason)}</b></div>`}
     <div class="wif-f"><span>Iteration</span><b title="${esc(iter)}">${esc(iter)}</b></div>
   </div>
-  <div class="wif-tabs"><span class="on">Details</span><span>History</span><span>Links (${(f ? 1 : 0) + ts.length + deps.length + succ.length})</span><span>Attachments (0)</span></div>
+  <div class="wif-tabs"><span class="on">Details</span>${REAL ? '' : `<span>History</span><span>Links (${(f ? 1 : 0) + ts.length + deps.length + succ.length})</span><span>Attachments (0)</span>`}</div>
   <div class="wif-body">
     <div class="wif-main">
       <div class="wif-sec"><h4>Description</h4><div class="wif-rich">${d.story}</div></div>
-      <div class="wif-sec"><h4>Acceptance Criteria <span class="sample">sample text in this demo</span></h4><div class="wif-rich"><ol>${d.ac.map(a => `<li>${a}</li>`).join('')}</ol></div></div>
-      <div class="wif-sec"><h4>Discussion</h4><div class="wif-disc">${av(people[0], 'sm')}<div class="box">Add a comment. Use # to link a work item, @ to mention a person.</div></div></div>
+      <div class="wif-sec"><h4>Acceptance Criteria${REAL ? '' : ' <span class="sample">sample text in this demo</span>'}</h4><div class="wif-rich">${d.acHtml != null ? d.acHtml : `<ol>${d.ac.map(a => `<li>${a}</li>`).join('')}</ol>`}</div></div>
+      ${REAL ? '' : `<div class="wif-sec"><h4>Discussion</h4><div class="wif-disc">${av(people[0], 'sm')}<div class="box">Add a comment. Use # to link a work item, @ to mention a person.</div></div></div>`}
     </div>
     <div class="wif-side">
       <div class="wif-sec"><h4>Planning</h4><div class="wif-card wif-kv">
         <span>Story Points</span><b class="big">${pts(it) == null ? '&nbsp;' : pts(it)}</b>
-        <span>Priority</span><b>${it.id % 3 + 1}</b>
-        <span>Risk</span><b>${['1 - High', '2 - Medium', '3 - Low'][it.id % 3]}</b>
+        ${REAL ? '' : `<span>Priority</span><b>${it.id % 3 + 1}</b>
+        <span>Risk</span><b>${['1 - High', '2 - Medium', '3 - Low'][it.id % 3]}</b>`}
         <span>Remaining work</span><b>${ts.length ? h1(hrs) + ' h in ' + ts.length + ' task' + (ts.length > 1 ? 's' : '') : 'No tasks yet'}</b></div></div>
-      <div class="wif-sec"><h4>Classification</h4><div class="wif-card wif-kv"><span>Value area</span><b>${it.id % 4 ? 'Business' : 'Architectural'}</b></div></div>
-      <div class="wif-sec"><h4>Development</h4><div class="wif-card"><div class="wif-add">+ Add link</div><div class="sub" style="margin-top:4px">Link an Azure Repos commit, pull request or branch to see the status of your development.</div></div></div>
-      <div class="wif-sec"><h4>Related Work</h4><div class="wif-card"><div class="wif-add">+ Add link</div>
+      ${REAL ? '' : `<div class="wif-sec"><h4>Classification</h4><div class="wif-card wif-kv"><span>Value area</span><b>${it.id % 4 ? 'Business' : 'Architectural'}</b></div></div>
+      <div class="wif-sec"><h4>Development</h4><div class="wif-card"><div class="wif-add">+ Add link</div><div class="sub" style="margin-top:4px">Link an Azure Repos commit, pull request or branch to see the status of your development.</div></div></div>`}
+      <div class="wif-sec"><h4>Related Work</h4><div class="wif-card">${REAL ? '' : '<div class="wif-add">+ Add link</div>'}
         ${f ? `<div class="wif-grp">Parent</div>${link(f)}` : ''}
         ${ts.length ? `<div class="wif-grp">Child</div>${ts.map(t => link(t, ` &middot; ${t.remaining} h${t.assignee ? ' &middot; ' + esc(t.assignee) : ''}${t.isNewTask ? ` <span class="tag new">new</span> <button class="rm" data-qtdel="${t.id}" title="Remove this new task">&times;</button>` : ''}`)).join('')}` : ''}
         <div class="wif-grp">Add a task</div>${quickTaskHtml(it)}
@@ -962,7 +980,8 @@ $('#splen').onchange = e => { const L = load('len', {}); L[target] = +e.target.v
   render(); toast(`${SPR[target].name} is now ${e.target.value} week${e.target.value > 1 ? 's' : ''} (demo)`); };
 $('#q').oninput = renderBoard; $('#group').onchange = renderBoard;
 $('#swimrows').onchange = e => { swimRows = e.target.value; save('swimRows', swimRows); renderBoard(); };
-$('#reset').onclick = () => { if (!confirm('Start over? This clears the plan, estimates, votes and capacity in this browser and brings back the example sprint.')) return;
+if (REAL) { $('#reset').textContent = 'Discard changes'; $('#reset').title = 'Throw away unsaved changes and reload from Azure DevOps'; }
+$('#reset').onclick = () => { if (!confirm(REAL ? 'Discard your unsaved plan changes and reload from Azure DevOps?' : 'Start over? This clears the plan, estimates, votes and capacity in this browser and brings back the example sprint.')) return;
   ['plan', 'est', 'cap', 'meeting', 'len', 'target', 'newtasks'].forEach(k => { try { localStorage.removeItem(KEY + '.' + k); } catch (e) {} }); location.reload(); };
 $('#export').onclick = () => {
   const rows = [['ID', 'Title', 'Change', 'From', 'To']], name = i => i >= 0 ? SPR[i].path : D.project;
@@ -1068,7 +1087,7 @@ function prefill() {
 }
 let freshExample = false;
 try { freshExample = localStorage.getItem(KEY + '.plan') === null; } catch (e) {}
-if (freshExample && EX >= 0 && target === EX && String(SPR[EX].start).slice(0, 10) === EX_START) { prefill(); save('plan', P); }
+if (!REAL && freshExample && EX >= 0 && target === EX && String(SPR[EX].start).slice(0, 10) === EX_START) { prefill(); save('plan', P); }
 
 // Collapsible navigation, remembered in this browser
 function setNav(min) {
@@ -1080,6 +1099,52 @@ function setNav(min) {
 $$('.adonav .ni').forEach(a => { if (!a.title) a.title = a.textContent.trim(); });
 $('#navtoggle').onclick = $('#navtoggle2').onclick = () => setNav(!$('.shell').classList.contains('navmin'));
 try { setNav(localStorage.getItem('adomap.planning.nav') === 'min'); } catch (e) { setNav(false); }
+
+// ---------- Save plan (real hub): write the changes to Azure DevOps
+function pendingChanges() {
+  const moves = Object.entries(P).map(([id, p]) => ({id: +id, sp: p.sp, who: p.who})).filter(m => { const it = byId.get(m.id); return it && (m.sp !== it.sp || m.who !== (it.assignee || '')); });
+  const estimates = Object.entries(E).map(([id, v]) => ({id: +id, pts: v})).filter(x => byId.has(x.id) && byId.get(x.id).points !== x.pts);
+  const tasks = NT.map(t => { const st = byId.get(t.parent); return {parent: t.parent, title: t.title, who: t.who, hrs: t.hrs, sp: st ? planned(st).sp : -1}; });
+  const cap = PAPI ? PAPI.capacityChanges(C) : [];
+  return {moves, estimates, tasks, cap, count: moves.length + estimates.length + tasks.length + cap.length};
+}
+function refreshSaveButton() { if (!REAL) return; const n = pendingChanges().count; $('#saveplan').textContent = n ? `Save plan (${n})` : 'Save plan'; }
+function saveDialog(html) { $('#saveinner').innerHTML = html; $('#savebox').hidden = false; }
+if (REAL) {
+  $('#saveplan').hidden = false;
+  $('#saveplan').onclick = () => {
+    const ch = pendingChanges();
+    if (!ch.count) { toast('Nothing to save - the plan matches Azure DevOps.'); return; }
+    const li = (n, what) => n ? `<li><b>${n}</b> ${what}</li>` : '';
+    saveDialog(`<h3>Save the plan to Azure DevOps?</h3><div class="sub">For the ${esc(D.team || 'team')} team. Everyone will see these changes.</div><ul>
+      ${li(ch.moves.length, 'stories moved between sprints or given a new owner')}${li(ch.estimates.length, 'new estimates')}
+      ${li(ch.tasks.length, 'new tasks, linked to their stories')}${li(ch.cap.length, 'capacity or days-off updates')}</ul>
+      <div class="sub">A story someone else changed since you opened the hub isn't overwritten - you'll be told which.</div>
+      <div class="acts"><button class="btn" id="savecancel">Cancel</button><button class="btn primary" id="savego">Save</button></div>`);
+  };
+}
+document.addEventListener('click', async e => {
+  if (e.target.id === 'savecancel' || e.target.id === 'saveclose') { $('#savebox').hidden = true; if (e.target.id === 'saveclose') location.reload(); return; }
+  const ado = e.target.closest('[data-adoopen]'); if (ado && PAPI) { PAPI.openWorkItem(+ado.dataset.adoopen); return; }
+  if (e.target.id !== 'savego') return;
+  const ch = pendingChanges();
+  e.target.disabled = true; e.target.textContent = 'Saving...';
+  let res;
+  try { res = await PAPI.save({moves: ch.moves, estimates: ch.estimates, tasks: ch.tasks, capacity: C}); }
+  catch (err) { res = {saved: {moves: [], estimates: [], tasks: [], capacity: false}, errors: [err.message || String(err)]}; }
+  // forget what was saved; keep anything that failed so it can be tried again
+  res.saved.moves.forEach(id => delete P[id]); res.saved.estimates.forEach(id => delete E[id]);
+  NT = NT.filter((t, k) => !res.saved.tasks.includes(k));
+  save('plan', P); save('est', E); save('newtasks', NT);
+  if (res.saved.capacity && !res.errors.some(x => /^Capacity/.test(x))) { try { localStorage.removeItem(KEY + '.cap'); } catch (err) {} }
+  const ok = res.saved.moves.length + res.saved.estimates.length + res.saved.tasks.length + (res.saved.capacity ? 1 : 0);
+  saveDialog(res.errors.length
+    ? `<h3>Saved with problems</h3><p>${ok ? 'Some changes were saved.' : 'Nothing could be saved.'} These need another look:</p><div class="err">${res.errors.map(x => `<div>&bull; ${esc(x)}</div>`).join('')}</div>
+       <div class="acts"><button class="btn primary" id="saveclose">Reload from Azure DevOps</button></div>`
+    : `<h3>&#9989; Saved to Azure DevOps</h3><p>The plan is in Azure DevOps now. Reloading so you see it as everyone else does.</p><div class="acts"><button class="btn primary" id="saveclose">Reload</button></div>`);
+});
+const renderWithSave = render;
+render = function () { renderWithSave(); refreshSaveButton(); };
 
 tick(); render();
 </script>

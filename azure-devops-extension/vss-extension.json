@@ -2,9 +2,9 @@
   "manifestVersion": 1,
   "id": "ado-work-map-boards",
   "publisher": "DasCondor",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "name": "ADO Work Map",
-  "description": "A Work Map hub in Boards: epics to tasks, every sprint, what changed, repos, a commit heatmap and a spider web of links. Uses your own access; data stays in your browser.",
+  "description": "Two hubs in Boards: a Work Map of epics to tasks, sprints, changes, repos and links, and Sprint planning as a team - capacity, days off, poker and a plan you can save back.",
   "public": false,
   "galleryFlags": ["Preview"],
   "categories": ["Azure Boards"],
@@ -22,7 +22,7 @@
   },
   "repository": {"type": "git", "uri": "https://github.com/DasCondor/ado-work-map-extension"},
   "branding": {"color": "#0f62fe", "theme": "dark"},
-  "scopes": ["vso.work", "vso.code", "vso.project", "vso.analytics"],
+  "scopes": ["vso.work", "vso.work_write", "vso.code", "vso.project", "vso.analytics"],
   "files": [
     {"path": "dist", "addressable": true},
     {"path": "images", "addressable": true}
@@ -37,6 +37,17 @@
         "name": "Work Map",
         "order": 100,
         "uri": "dist/hub.html"
+      }
+    },
+    {
+      "id": "sprint-planning-hub",
+      "type": "ms.vss-web.hub",
+      "description": "Plan a sprint as a team: capacity and days off, planning poker, assigned work against capacity, and save the plan to Azure DevOps",
+      "targets": ["ms.vss-work-web.work-hub-group"],
+      "properties": {
+        "name": "Sprint planning",
+        "order": 101,
+        "uri": "dist/planning.html"
       }
     }
   ]

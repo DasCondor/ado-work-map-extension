@@ -29,6 +29,15 @@ Filters (search, epic, person, area, tag), light / dark theme, and links straigh
 
 ![Sprints](images/sprints.png)
 
+## Sprint planning
+
+A second hub, **Boards > Sprint planning**, runs sprint planning as a team meeting on your real sprints and work items:
+
+- **Capacity check-in** - each person's hours per day and days off from the team's capacity, plus half days or a few hours off, and team days off.
+- **Carry over** last sprint's unfinished work, **planning poker** with the story's description and acceptance criteria, and **people lanes or swimlanes** with assigned work against capacity.
+- Quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote.
+- **Save plan** writes it all back: stories' sprint, owner and points, the new tasks, and capacity and days off. A story someone else changed meanwhile is never overwritten.
+
 ## Permissions
 
 | Scope | Used for |
@@ -37,8 +46,9 @@ Filters (search, epic, person, area, tag), light / dark theme, and links straigh
 | Code (read) | Repos, pull request titles / status / branches, commit dates and authors - never file contents or diffs |
 | Project and team (read) | The team list in Settings |
 | Analytics (read) | Only when you click **Pull history** |
+| Work items (read & write) | Only when someone clicks **Save plan** in Sprint planning: sprint, owner and points of stories, new tasks |
 
-The extension never writes to Azure DevOps.
+Team capacity and days off are saved through the team settings (the same as the Capacity page). Partial days off, which Azure DevOps can't store, are kept in this extension's data storage for the team. The Work Map never writes anything.
 
 ![Commit heatmap](images/commit-heatmap.png)
 
