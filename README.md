@@ -20,6 +20,13 @@
 
 ## Latest updates
 
+### 1.4.2 &mdash; Layout fixes, sprint map expand / collapse all
+
+- **Commit heatmap:** Top repos and Top people sit right under the totals, above the heatmap, instead of below it.
+- **Sprint detail:** By person spans the full width above the sprint's work, so there's no empty column beside the tree.
+- **Sprint map:** **Expand all** and **Collapse all** open or close every epic's features at once.
+- **Live demo:** clicking **Boards** in the side panel folds its pages, or opens them as a menu when the panel is collapsed, so you can switch hubs either way.
+
 ### 1.4.1 &mdash; Filters that follow each other, Technical Stories
 
 - **Filter bar:** people and tags are multiple choice, there's a persistent **Exclude tags** list (it survives Clear filters), and the area path can be saved as your default (**Open with this area path** inside the Area list). Every list only offers what the other filters leave: pick an area path and the Epic list shrinks to that area's epics. Lists longer than 5 get a search box.

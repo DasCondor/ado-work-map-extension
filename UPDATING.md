@@ -4,7 +4,7 @@ Every update is the same five steps. Nothing on the Azure DevOps side needs re-i
 
 ## 1. Bump the version
 
-Open `azure-devops-extension/vss-extension.json` and raise `"version"` (for example `1.4.1` -> `1.4.2`). The Marketplace refuses a version it has seen before, so every upload needs a new number: last digit for small fixes, middle digit for new features.
+Open `azure-devops-extension/vss-extension.json` and raise `"version"` (for example `1.4.2` -> `1.4.3`). The Marketplace refuses a version it has seen before, so every upload needs a new number: last digit for small fixes, middle digit for new features.
 
 ## 2. Write it up
 
