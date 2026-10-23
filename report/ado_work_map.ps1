@@ -1004,16 +1004,16 @@ function New-DemoData {
     }
     $sprints = @(11..16 | ForEach-Object { "$Project\Sprint $_" })
     $current = $sprints[3]
-    # Two-week sprints, Sprint 14 is the one running today
+    # Four-week sprints (Monday to the fourth Friday), Sprint 14 running today and Sprint 15 starting next Monday
     $today = (Get-Date).Date
-    $s14 = $today.AddDays(-((([int]$today.DayOfWeek) + 6) % 7) - 7)
+    $s15 = $today.AddDays(7 - ((([int]$today.DayOfWeek) + 6) % 7))
     $sprintStart = @{}
     $iterations = New-Object 'Collections.Generic.List[object]'
     foreach ($k in 11..16) {
-        $start = $s14.AddDays(($k - 14) * 14)
+        $start = $s15.AddDays(($k - 15) * 28)
         $sprintStart["$Project\Sprint $k"] = $start
         $iterations.Add(@{ name = "Sprint $k"; path = "$Project\Sprint $k"; start = $start.ToString('yyyy-MM-ddT00:00:00Z')
-                finish = $start.AddDays(13).ToString('yyyy-MM-ddT00:00:00Z'); timeFrame = '' })
+                finish = $start.AddDays(25).ToString('yyyy-MM-ddT00:00:00Z'); timeFrame = '' })
     }
     function Iso($d) { $d.ToString('yyyy-MM-ddTHH:mm:ssZ') }
     $people = @('Avery Chen', 'Jordan Patel', 'Sam Rivera', 'Taylor Brooks', 'Riley Okafor')
