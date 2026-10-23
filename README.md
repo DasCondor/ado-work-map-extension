@@ -20,6 +20,10 @@
 
 ## Latest updates
 
+### 1.4.4 &mdash; Spider web uses the whole canvas
+
+- **Spider web:** the layout spreads to the shape of the canvas instead of settling into a circle in the middle, so on a wide screen the graph uses the full width and labels overlap far less. Small graphs, like one sprint, are widened once the layout finishes (skipped if you've moved or zoomed).
+
 ### 1.4.3 &mdash; Less empty space on Sprints and the commit heatmap
 
 - **Sprint detail:** By person sits beside the sprint strip and totals, filling the empty space at the top; the sprint's work runs full width below. On narrow screens it drops back under the totals.
