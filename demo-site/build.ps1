@@ -24,7 +24,7 @@ $utf8 = New-Object Text.UTF8Encoding $false
 # The report, from the sample data
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('adomap_demo_' + [guid]::NewGuid().ToString('N'))
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'ado_work_map.ps1') -Demo -NoOpen -OutDir $tmp | Out-Null
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'report\ado_work_map.ps1') -Demo -NoOpen -OutDir $tmp | Out-Null
     $report = [IO.File]::ReadAllText((Join-Path $tmp 'ado_work_map.html'))
 }
 finally { if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force } }

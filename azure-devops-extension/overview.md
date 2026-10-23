@@ -44,4 +44,4 @@ The extension never writes to Azure DevOps.
 
 ## Source
 
-MIT licensed: [github.com/DasCondor/ado-work-map](https://github.com/DasCondor/ado-work-map). Issues and ideas welcome there.
+MIT licensed: [github.com/DasCondor/ado-work-map-extension](https://github.com/DasCondor/ado-work-map-extension). Issues and ideas welcome there.

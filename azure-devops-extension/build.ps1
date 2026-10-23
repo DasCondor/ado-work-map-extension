@@ -3,7 +3,7 @@
     Build the ADO Work Map Azure DevOps extension (Boards > Work Map hub).
 
 .DESCRIPTION
-    Generates dist\ from the report template inside ado_work_map.ps1, so the hub always
+    Generates dist\ from the report template inside report\ado_work_map.ps1, so the hub always
     shows the same report as the script:
       dist\hub.html   the template's page, plus the hub bar, settings and loading panel
       dist\report.js  the template's report script, wrapped as runReport(D)
@@ -26,7 +26,7 @@ $repo = Split-Path -Parent $ext
 $utf8 = New-Object Text.UTF8Encoding $false
 
 # --- the report template from the script
-$src = [IO.File]::ReadAllText((Join-Path $repo 'ado_work_map.ps1')).Replace("`r`n", "`n")
+$src = [IO.File]::ReadAllText((Join-Path $repo 'report\ado_work_map.ps1')).Replace("`r`n", "`n")
 $open = "`$HtmlTemplate = @'`n"
 $a = $src.IndexOf($open)
 if ($a -lt 0) { throw 'Report template not found in ado_work_map.ps1' }

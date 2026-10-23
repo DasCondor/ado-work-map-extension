@@ -16,11 +16,11 @@
     "license": {"path": "LICENSE.txt"}
   },
   "links": {
-    "repository": {"uri": "https://github.com/DasCondor/ado-work-map"},
-    "support": {"uri": "https://github.com/DasCondor/ado-work-map/issues"},
-    "license": {"uri": "https://github.com/DasCondor/ado-work-map/blob/main/LICENSE"}
+    "repository": {"uri": "https://github.com/DasCondor/ado-work-map-extension"},
+    "support": {"uri": "https://github.com/DasCondor/ado-work-map-extension/issues"},
+    "license": {"uri": "https://github.com/DasCondor/ado-work-map-extension/blob/main/LICENSE"}
   },
-  "repository": {"type": "git", "uri": "https://github.com/DasCondor/ado-work-map"},
+  "repository": {"type": "git", "uri": "https://github.com/DasCondor/ado-work-map-extension"},
   "branding": {"color": "#0f62fe", "theme": "dark"},
   "scopes": ["vso.work", "vso.code", "vso.project", "vso.analytics"],
   "files": [

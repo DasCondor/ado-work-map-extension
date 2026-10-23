@@ -24,7 +24,7 @@ if (-not $OutFile) { $OutFile = Join-Path $repo 'docs\planning.html' }
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('adomap_planning_' + [guid]::NewGuid().ToString('N'))
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'ado_work_map.ps1') -Demo -NoOpen -OutDir $tmp | Out-Null
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'report\ado_work_map.ps1') -Demo -NoOpen -OutDir $tmp | Out-Null
     $json = [IO.File]::ReadAllText((Join-Path $tmp 'ado_work_map.json'))
 }
 finally { if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force } }
