@@ -20,6 +20,10 @@
 
 ## Latest updates
 
+### 1.2.2 &mdash; "Since my last visit"
+
+- The Work Map's Changes tab says **Since my last visit** (was "Latest pull"), and the header says **data refreshed**: the hub refreshes every time you open it, so there's no pull to speak of. The live demo matches.
+
 ### 1.2.1 &mdash; Marketplace update
 
 - Same as 1.2.0 (Sprint planning as a real hub), published under a new version number for the Marketplace. The live demo now uses 4-week sprints on both hubs, with Sprint 15 on Oct 26 &ndash; Nov 20.

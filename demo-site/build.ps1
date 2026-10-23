@@ -52,6 +52,8 @@ body{font-family:"Segoe UI","Segoe UI Web (West European)",-apple-system,BlinkMa
 $at = $report.IndexOf('</head>')
 if ($at -lt 0) { throw 'Report has no </head>' }
 $report = $report.Substring(0, $at) + $palette + $report.Substring($at)
+# Same "visit" wording as the extension hub (see azure-devops-extension\build.ps1)
+$report = $report.Replace('>Latest pull<', '>Since my last visit<').Replace('data pulled ${', 'data refreshed ${').Replace("'since the previous pull ('", "'since your last visit ('").Replace("'in the latest pull'", "'since your last visit'")
 [IO.File]::WriteAllText((Join-Path $docs 'work-map.html'), $report, $utf8)
 Write-Host "Built $(Join-Path $docs 'work-map.html')"
 

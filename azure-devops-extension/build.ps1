@@ -53,6 +53,9 @@ $script = $script.Replace($dataLine, '')
 
 # In the hub the history comes from this browser, not history.csv
 $markup = $markup.Replace('(whole scope, from history.csv)', '(whole scope, saved on each visit - Pull history adds the past)')
+# The hub refreshes on every visit, so "pull" wording becomes "visit" (the script keeps its own)
+$markup = $markup.Replace('>Latest pull<', '>Since my last visit<')
+$script = $script.Replace('data pulled ${', 'data refreshed ${').Replace("'since the previous pull ('", "'since your last visit ('").Replace("'in the latest pull'", "'since your last visit'")
 
 $hubCss = @'
 <style>
