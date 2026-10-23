@@ -20,6 +20,10 @@
 
 ## Latest updates
 
+### 1.2.1 &mdash; Marketplace update
+
+- Same as 1.2.0 (Sprint planning as a real hub), published under a new version number for the Marketplace. The live demo now uses 4-week sprints on both hubs, with Sprint 15 on Oct 26 &ndash; Nov 20.
+
 ### 1.2.0 &mdash; Sprint planning is a real hub
 
 **Boards > Sprint planning** now works on your project, next to the Work Map:
