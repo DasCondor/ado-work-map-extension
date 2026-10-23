@@ -20,6 +20,11 @@
 
 ## Latest updates
 
+### 1.4.3 &mdash; Less empty space on Sprints and the commit heatmap
+
+- **Sprint detail:** By person sits beside the sprint strip and totals, filling the empty space at the top; the sprint's work runs full width below. On narrow screens it drops back under the totals.
+- **Commit heatmap:** Top repos and Top people sit in a column beside the heatmap (below it when the heatmap is too wide).
+
 ### 1.4.2 &mdash; Layout fixes, sprint map expand / collapse all
 
 - **Commit heatmap:** Top repos and Top people sit right under the totals, above the heatmap, instead of below it.
