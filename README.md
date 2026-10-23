@@ -20,7 +20,7 @@
 
 ## Latest updates
 
-### 1.3.0 &mdash; Filters that follow each other, Technical Stories
+### 1.4.1 &mdash; Filters that follow each other, Technical Stories
 
 - **Filter bar:** people and tags are multiple choice, there's a persistent **Exclude tags** list (it survives Clear filters), and the area path can be saved as your default (**Open with this area path** inside the Area list). Every list only offers what the other filters leave: pick an area path and the Epic list shrinks to that area's epics. Lists longer than 5 get a search box.
 - **Sprints:** the sprint strip stays put while you scroll the sprint's work, so you can always see which sprint you're in. Sprint detail and the sprint map follow every filter, as before. In the sprint map, epics and features are links, and hovering a cell lists its stories, technical stories and bugs with links to each.
