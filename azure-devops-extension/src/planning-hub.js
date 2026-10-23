@@ -11,8 +11,8 @@
 import * as SDK from './sdk/SDK.min.js';
 
 const API = '7.1';
-const STORY_TYPES = ['User Story', 'Product Backlog Item', 'Requirement', 'Bug'];
-const LEVELS = {Epic: 0, Feature: 1, 'User Story': 2, 'Product Backlog Item': 2, Requirement: 2, Bug: 2, Task: 3};
+const STORY_TYPES = ['User Story', 'Technical Story', 'Product Backlog Item', 'Requirement', 'Bug'];
+const LEVELS = {Epic: 0, Feature: 1, 'User Story': 2, 'Technical Story': 2, 'Product Backlog Item': 2, Requirement: 2, Bug: 2, Task: 3};
 const POINT_FIELDS = ['Microsoft.VSTS.Scheduling.StoryPoints', 'Microsoft.VSTS.Scheduling.Effort', 'Microsoft.VSTS.Scheduling.Size'];
 const PARTIAL = 'partial-days-off';          // extension data collection
 const DAY = 864e5;

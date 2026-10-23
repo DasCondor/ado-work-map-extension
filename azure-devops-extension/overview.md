@@ -14,7 +14,7 @@ It's the same interactive report as the free [ADO Work Map PowerShell script](ht
 - **Maps** - a treemap of epics and features by % done, a repo matrix, and a commit heatmap for everyone or by person, with details on hover. Narrow every map to one sprint.
 - **Spider web** - work items and their links (parent/child, related, dependencies) plus the PRs, commits, branches, builds and repos attached to them. Starts on the current sprint; overview and focus modes keep big projects responsive.
 
-Filters (search, epic, person, area, tag), light / dark theme, and links straight to every work item.
+Filters (search, epic, people, area path with a saved default, tags to include and tags to exclude - each list narrowed by the other filters, with a search box), light / dark theme, and links straight to every work item.
 
 ![Spider web](images/spider-web.png)
 
