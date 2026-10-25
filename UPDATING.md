@@ -4,11 +4,11 @@ Every update is the same five steps. Nothing on the Azure DevOps side needs re-i
 
 ## 1. Bump the version
 
-Open `azure-devops-extension/vss-extension.json` and raise `"version"` (for example `1.4.6` -> `1.4.7`). The Marketplace refuses a version it has seen before, so every upload needs a new number: last digit for small fixes, middle digit for new features.
+Open `azure-devops-extension/vss-extension.json` and raise `"version"` (for example `1.5.0` -> `1.5.1`). The Marketplace refuses a version it has seen before, so every upload needs a new number: last digit for small fixes, middle digit for new features.
 
 ## 2. Write it up
 
-Add a short entry at the top of **Latest updates** in `README.md`, newest first. If a screen changed, retake its screenshot in `docs/images/`.
+Add an entry at the top of `UPDATES.md`, newest first, and replace the short **Latest updates** summary near the bottom of `README.md`. If a screen changed, retake its screenshot in `docs/images/`.
 
 ## 3. Build
 

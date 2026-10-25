@@ -1,0 +1,164 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>running</title></head>
+<body><pre id="out">running...</pre>
+<script>
+// Sprint planning save tests: each case opens the real hub (dist/planning.html) against fake-ado.js with
+// some failure switched on (window.F), then calls its save API directly and checks what was written.
+const out = []; let fails = 0;
+const ok = (c, what) => { out.push((c ? 'pass  ' : 'FAIL  ') + what); if (!c) fails++; };
+const wait = (f, ms = 15000) => new Promise((res, rej) => { const t0 = Date.now();
+  (function poll() { let v; try { v = f(); } catch (e) {} if (v) return res(v); if (Date.now() - t0 > ms) return rej(new Error('timed out')); setTimeout(poll, 50); })(); });
+const LS = 'adomap.planning2.Fabrikam.t1';
+async function open(flags, keepStore, drafts, saveOff) {
+  window.F = flags || {}; window.FAKE_CALLS = []; window.FAKE_DOCS = []; window.TEST_D = null;
+  if (!keepStore) window.FAKE_STORE = {};
+  Object.keys(localStorage).filter(k => k.startsWith(LS)).forEach(k => localStorage.removeItem(k));
+  if (drafts) localStorage.setItem(LS + '.newtasks', JSON.stringify(drafts));
+  if (!saveOff) localStorage.setItem(LS + '.saveOn', '1');   // Save plan is opt-in; most cases test with it on
+  const old = document.querySelector('iframe'); if (old) old.remove();
+  const f = document.createElement('iframe'); f.src = 'planning.html?' + Math.random(); document.body.appendChild(f);
+  const api = await wait(() => f.contentWindow.PLANNING_API);
+  await wait(() => window.TEST_D);
+  return {w: f.contentWindow, api, D: window.TEST_D};
+}
+const clone = o => JSON.parse(JSON.stringify(o));
+const calls = (m, re) => FAKE_CALLS.filter(c => c.method === m && re.test(c.path));
+const none = {moves: [], estimates: [], tasks: []};
+const task = {parent: 101, title: 'Validation', who: 'Ana Ruiz', hrs: 2, sp: 1};
+// a task the earlier attempt made: same story, title, owner, hours and sprint as the draft (or with changes)
+const madeTask = (over) => [{id: 900, fields: Object.assign({'System.Title': 'Validation', 'System.AssignedTo': {displayName: 'Ana Ruiz'},
+  'Microsoft.VSTS.Scheduling.RemainingWork': 2, 'System.IterationPath': 'Fabrikam\\Sprint 2', 'System.CreatedDate': new Date().toISOString()}, over || {})}];
+const recent = [{source: {id: 101}, target: {id: 900}}];
+const drafts = () => JSON.parse(localStorage.getItem(LS + '.newtasks') || '[]');
+const click = (w, sel) => { const b = w.document.querySelector(sel); if (b) b.click(); return !!b; };
+(async () => {
+  try {
+    let h = await open({flakyGet: 1});
+    ok(calls('GET', /teamsettings\/iterations$/).length === 2, 'a read that fails on the network is retried');
+    ok(!(h.D.capacityWarnings || []).length, 'no capacity warning when capacity reads fine');
+
+    h = await open({capFail: 'it3'});
+    ok(h.D.capacityWarnings.length === 1 && /Sprint 3/.test(h.D.capacityWarnings[0]), 'capacity that could not be read is reported');
+    ok(!h.w.document.querySelector('#capwarn').hidden, 'the warning shows on the capacity step');
+    let C = clone(h.D.capacity); C[2].hpd['Ana Ruiz'] = 8;
+    ok(h.api.capacityChanges(C).length === 0, 'changes to unread capacity are not offered for saving');
+    let r = await h.api.save(Object.assign({capacity: C}, none));
+    ok(calls('PATCH', /capacities/).length === 0, 'and nothing is written for it');
+
+    h = await open({offFail: 'it3'});
+    ok(h.D.capacityWarnings.length === 1 && /Sprint 3/.test(h.D.capacityWarnings[0]), "team days off that can't be read: planning still opens, with a warning");
+    C = clone(h.D.capacity); C[2].hpd['Ana Ruiz'] = 8;
+    ok(h.api.capacityChanges(C).length === 0, "and that sprint's capacity is not offered for saving");
+
+    h = await open({});
+    C = clone(h.D.capacity); C[2].hpd['Ben Ode'] = 1;   // Development 3 + Testing 2 today
+    const below = h.api.capacityChanges(C).find(x => x.who === 'Ben Ode');
+    ok(below && /less than the 2 h\/day kept for Testing/.test(below.invalid), 'a total below the other activities is flagged in the preview');
+    r = await h.api.save(Object.assign({capacity: C}, none));
+    ok(calls('PATCH', /capacities\/m2$/).length === 0 && r.errors.some(e => /Ben Ode.*less than/.test(e)), "and isn't saved as something else");
+    C[2].hpd['Ben Ode'] = 6;
+    ok(h.api.capacityChanges(C).find(x => x.who === 'Ben Ode').split === 'Development 4, Testing 2', 'the preview shows how the total is split');
+
+    h = await open({capChanged: true});
+    C = clone(h.D.capacity); C[2].hpd['Ana Ruiz'] = 8;
+    r = await h.api.save(Object.assign({capacity: C}, none));
+    ok(r.errors.some(e => /Ana Ruiz.*changed in Azure DevOps/.test(e)), 'capacity changed by someone else meanwhile is reported');
+    ok(calls('PATCH', /capacities\/m1$/).length === 0, 'and not overwritten');
+
+    h = await open({cap403: true});
+    C = clone(h.D.capacity); C[2].hpd['Ana Ruiz'] = 8;
+    r = await h.api.save(Object.assign({capacity: C}, none));
+    ok(r.errors.some(e => /permission to change this team's capacity/.test(e)), 'missing permission to edit capacity is explained');
+
+    h = await open({});
+    C = clone(h.D.capacity); C[2].hpd['Ben Ode'] = 6;
+    r = await h.api.save(Object.assign({capacity: C}, none));
+    const p2 = calls('PATCH', /capacities\/m2$/);
+    ok(!r.errors.length && p2.length === 1, 'a capacity change saves when nobody else changed it');
+    ok(p2.length && p2[0].body.activities.map(a => a.capacityPerDay).join() === '4,2', 'activities keep their split (4 + 2 = 6)');
+
+    h = await open({});
+    const d1 = h.D.sprints[2].start.slice(0, 10);
+    C = clone(h.D.capacity); C[2].off['Ana Ruiz'] = Object.assign({}, C[2].off['Ana Ruiz'], {[d1]: 'half'}); C[2].off['Ben Ode'] = {[d1]: 'half'};
+    r = await h.api.save(Object.assign({capacity: C}, none));
+    ok(!r.errors.length && FAKE_DOCS.length === 1 && FAKE_DOCS[0].op === 'create', 'partial days off: one new document for the sprint');
+    h = await open({}, true);
+    window.FAKE_STORE['t1.it3'].__etag = 9;   // someone else saves partial days off after this plan was opened
+    C = clone(h.D.capacity); C[2].off['Ben Ode'] = {};
+    r = await h.api.save(Object.assign({capacity: C}, none));
+    ok(r.errors.some(e => /partial days off.*changed in Azure DevOps/.test(e)), "partial days off changed meanwhile aren't overwritten");
+
+    h = await open({taskDrop: true});
+    r = await h.api.save(Object.assign({}, none, {tasks: [task], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 1, 'a task create is not retried after the connection drops');
+    ok(r.errors.some(e => /may or may not have been created/.test(e)) && r.uncertain.join() === '0' && !!r.attemptAt, 'the uncertain create is reported and marked on its draft');
+    const unsure = Object.assign({}, task, {uncertainAt: r.attemptAt});
+    h = await open({task503: true});
+    r = await h.api.save(Object.assign({}, none, {tasks: [task], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 1 && r.uncertain.join() === '0', 'a 503 on create is not retried and is marked uncertain');
+    h = await open({recent, made: madeTask()});
+    r = await h.api.save(Object.assign({}, none, {tasks: [unsure], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 0 && r.saved.tasks.length === 1 && /#900/.test(r.notes[0] || ''), 'saving again finds the exact task the earlier attempt made: no duplicate');
+    h = await open({badJson: true});
+    r = await h.api.save(Object.assign({}, none, {tasks: [task], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 1 && r.uncertain.join() === '0' && !r.saved.tasks.length, "a create whose answer can't be read is marked uncertain, not failed");
+    h = await open({recent, made: madeTask()});
+    r = await h.api.save(Object.assign({}, none, {tasks: [Object.assign({}, task, {uncertainAt: r.attemptAt})], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 0 && r.saved.tasks.length === 1, 'and the next save finds it: no duplicate POST');
+
+    h = await open({recent, made: madeTask({'Microsoft.VSTS.Scheduling.RemainingWork': 5})});
+    r = await h.api.save(Object.assign({}, none, {tasks: [unsure], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 0 && !r.saved.tasks.length && r.ambiguous.length === 1 && r.ambiguous[0].ids.join() === '900' && !('clearUncertain' in r),
+      'a similar but different task stays unresolved: not marked saved, not created');
+
+    // the page: a draft left unresolved asks Use / Create a separate task / Remove draft, and only an explicit choice changes it
+    const draft = {id: 9800, parent: 101, title: 'Validation', who: 'Ana Ruiz', hrs: 2, kind: 'validation', uncertainAt: new Date().toISOString(), similar: [900]};
+    h = await open({recent, made: madeTask({'Microsoft.VSTS.Scheduling.RemainingWork': 5})}, false, [draft]);
+    click(h.w, '#saveplan');
+    ok(!!h.w.document.querySelector('[data-decide="use"][data-id="900"]') && !!h.w.document.querySelector('[data-decide="new"]') && !!h.w.document.querySelector('[data-decide="drop"]'),
+      'the save preview offers: use #900, create a separate task, remove the draft');
+    click(h.w, '#savego'); await wait(() => /Saved with problems|Saved to Azure/.test(h.w.document.querySelector('#saveinner').textContent));
+    ok(calls('POST', /workitems\/\$Task$/).length === 0 && drafts()[0] && drafts()[0].uncertainAt && drafts()[0].similar.join() === '900' && !!h.w.document.querySelector('[data-decide="new"]'),
+      'saving without choosing creates nothing and keeps asking');
+    click(h.w, '[data-decide="new"]');
+    ok(drafts()[0].createAnyway === true && !drafts()[0].uncertainAt, '"Create a separate task" marks the draft to be created');
+    h = await open({recent, made: madeTask()}, false, drafts());
+    r = await h.api.save(Object.assign({}, none, {tasks: [Object.assign({}, task, {uncertainAt: undefined, createAnyway: true})], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 1, 'and it is then created, even though a similar task exists');
+    h = await open({}, false, [draft]);
+    click(h.w, '#saveplan'); click(h.w, '[data-decide="use"]');
+    ok(drafts().length === 0, '"Use #900" removes the draft');
+    h = await open({}, false, [draft]);
+    click(h.w, '#saveplan'); click(h.w, '[data-decide="drop"]');
+    ok(drafts().length === 0, '"Remove draft" removes it');
+    h = await open({recent, made: madeTask()});
+    r = await h.api.save(Object.assign({}, none, {tasks: [task], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 1 && !r.errors.length, 'a new task with the same title as a recent one is created (no uncertain attempt)');
+    h = await open({});
+    r = await h.api.save(Object.assign({}, none, {tasks: [task], capacity: h.D.capacity}));
+    ok(calls('POST', /workitems\/\$Task$/).length === 1 && !r.errors.length, 'a new task is created when none exists');
+
+    // Preview: Save plan is off until it's turned on beside the button, after reading the warning
+    h = await open({}, false, [Object.assign({}, task, {id: 9801})], true);
+    ok(/off/.test(h.w.document.querySelector('#saveplan').textContent), 'Save plan shows as off by default');
+    click(h.w, '#saveplan');
+    const dlg = () => h.w.document.querySelector('#saveinner').textContent;
+    ok(/Not yet validated against a live Azure DevOps organization/.test(dlg()) && !h.w.document.querySelector('#savego') && h.w.document.querySelector('#saveon').disabled,
+      'clicking it explains why, offers no Save, and the turn-on button needs the checkbox');
+    const ack = h.w.document.querySelector('#saveack'); ack.checked = true; ack.dispatchEvent(new Event('change', {bubbles: true}));
+    click(h.w, '#saveon');
+    ok(localStorage.getItem(LS + '.saveOn') === '1' && !!h.w.document.querySelector('#savego') && /Preview:/.test(dlg()), 'once turned on, the usual preview opens, still with the warning');
+    click(h.w, '#saveoff');
+    ok(localStorage.getItem(LS + '.saveOn') === null && /off/.test(h.w.document.querySelector('#saveplan').textContent), 'and it can be turned off again');
+    ok(calls('POST', /workitems\/\$Task$/).length === 0 && calls('PATCH', /./).length === 0, 'nothing was written while trying it');
+
+    h = await open({fail103: true});
+    r = await h.api.save({moves: [{id: 103, sp: 1, who: 'Chen Li'}], estimates: [], tasks: [], capacity: h.D.capacity});
+    ok(r.errors.some(e => /#103.*changed by someone else/.test(e)), 'a story changed by someone else is reported, not overwritten');
+  }
+  catch (e) { out.push('FAIL  test crashed: ' + e.message); fails++; }
+  document.getElementById('out').textContent = out.join('\n') + '\n' + (fails ? fails + ' failed' : 'All passed');
+  document.title = fails ? 'FAILED' : 'PASSED';
+})();
+</script>
+</body></html>

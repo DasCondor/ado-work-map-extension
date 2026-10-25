@@ -19,7 +19,7 @@ const DAY = 864e5;
 
 const $ = s => document.querySelector(s);
 let ctx = null, calls = 0;
-let byId = new Map(), sprints = [], members = [], origCap = {}, D = null;
+let byId = new Map(), sprints = [], members = [], origCap = {}, D = null, capWarnings = [];
 
 function step(msg) {
   const s = $('#pl-step'), l = $('#pl-log');
@@ -40,19 +40,27 @@ async function api(url, {method = 'GET', body, query, patch, noVersion} = {}) {
     if (body !== undefined) headers['Content-Type'] = patch ? 'application/json-patch+json' : 'application/json';
     let r;
     try { r = await fetch(full, {method, headers, body: body !== undefined ? JSON.stringify(body) : undefined}); }
-    catch (e) { if (attempt < 2) continue; throw new Error(`${method} ${url.split('?')[0]}: ${e.message}`); }
-    if ((r.status === 429 || r.status === 503) && attempt < 4) {
+    catch (e) {   // network error: retry reads only; a write may have gone through, so repeating it could do it twice
+      if (attempt < 2 && method === 'GET') continue;
+      const err = new Error(`${method} ${url.split('?')[0]}: ${e.message}`); err.uncertain = method !== 'GET'; throw err;
+    }
+    if ((r.status === 429 || r.status === 503) && attempt < 4 && method === 'GET') {
       await new Promise(res => setTimeout(res, 1000 * Math.min(30, Number(r.headers.get('Retry-After')) || 2 * (attempt + 1))));
       continue;
     }
     if (!r.ok) {
       let detail = '';
       try { const t = await r.text(); try { detail = JSON.parse(t).message || t; } catch (e) { detail = t; } } catch (e) {}
-      const err = new Error(String(detail || r.statusText).slice(0, 300));
+      const err = new Error(r.status === 429 ? 'Azure DevOps is busy (too many requests), so nothing was changed. Try again in a minute.' : String(detail || r.statusText).slice(0, 300));
       err.status = r.status;
+      if (r.status === 503 && method !== 'GET') err.uncertain = true;   // may or may not have been applied
       throw err;
     }
-    return r.status === 204 ? null : r.json();
+    if (r.status === 204) return null;
+    try { return await r.json(); }
+    catch (e) {   // the request went through but its answer can't be read: for a write, the outcome is unknown
+      const err = new Error(`${method} ${url.split('?')[0]}: the answer from Azure DevOps couldn't be read (${e.message})`); err.uncertain = method !== 'GET'; throw err;
+    }
   }
 }
 async function pool(items, n, fn) {
@@ -111,6 +119,27 @@ async function context() {
 const dayList = (start, finish) => { const out = []; if (!start || !finish) return out;
   for (let t = Date.parse(start.slice(0, 10) + 'T00:00:00Z'); t <= Date.parse(finish.slice(0, 10) + 'T00:00:00Z'); t += DAY) { const w = new Date(t).getUTCDay(); if (w && w < 6) out.push(ymd(t)); }
   return out; };
+const dayRanges = list => (list || []).map(r => [String(r.start).slice(0, 10), String(r.end).slice(0, 10)]).sort().join(';');
+const normTitle = s => String(s || '').trim().toLowerCase();
+// Tasks you created under these stories since a date, by story: [{id, title, who, hrs, iteration, created}]
+async function tasksMadeSince(parents, since) {
+  const out = new Map();
+  for (const ids of chunks(parents, 200)) {
+    const q = `SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] IN (${ids.join(',')}) AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' ` +
+      `AND [Target].[System.WorkItemType] = 'Task' AND [Target].[System.CreatedBy] = @me AND [Target].[System.CreatedDate] >= '${since.slice(0, 10)}' MODE (MustContain)`;
+    const rel = ((await api(`${ctx.projUrl}/_apis/wit/wiql`, {method: 'POST', body: {query: q}})).workItemRelations || []).filter(r => r.source && r.target);
+    for (const part of chunks(rel, 200)) {
+      const ws = (await api(`${ctx.baseUrl}/_apis/wit/workitemsbatch`, {method: 'POST', body: {ids: part.map(r => r.target.id),
+        fields: ['System.Title', 'System.AssignedTo', 'Microsoft.VSTS.Scheduling.RemainingWork', 'System.IterationPath', 'System.CreatedDate']}})).value || [];
+      const byTask = new Map(ws.map(w => [w.id, w.fields || {}]));
+      for (const r of part) { const f = byTask.get(r.target.id); if (!f) continue;
+        if (!out.has(r.source.id)) out.set(r.source.id, []);
+        out.get(r.source.id).push({id: r.target.id, title: normTitle(f['System.Title']), who: f['System.AssignedTo'] ? f['System.AssignedTo'].displayName || '' : '',
+          hrs: +f['Microsoft.VSTS.Scheduling.RemainingWork'] || 0, iteration: String(f['System.IterationPath'] || '').toLowerCase(), created: Date.parse(f['System.CreatedDate'] || 0)}); }
+    }
+  }
+  return out;
+}
 const rangesToDays = (ranges, days) => { const set = new Set(); for (const r of ranges || []) { const a = String(r.start).slice(0, 10), b = String(r.end).slice(0, 10); days.forEach(d => { if (d >= a && d <= b) set.add(d); }); } return set; };
 
 async function extData() {
@@ -194,32 +223,35 @@ async function load() {
   await pool(capIdx, 3, async i => {
     const s = sprints[i], days = dayList(s.start, s.finish);
     step(`Reading capacity for ${s.name}...`);
+    let failed = '';
     const [capRes, teamOff] = await Promise.all([
-      api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/capacities`).catch(() => ({teamMembers: []})),
-      api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/teamdaysoff`).catch(() => ({daysOff: []}))
+      api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/capacities`).catch(e => { failed = failed || e.message; return null; }),
+      api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/teamdaysoff`).catch(e => { failed = failed || e.message; return null; })
     ]);
-    const rows = capRes.teamMembers || capRes.value || [];
-    const c = {hpd: {}, off: {}, team: {}, raw: {}};
+    const rows = capRes ? capRes.teamMembers || capRes.value || [] : [];
+    // unread: shown as 0 hours but never saved, so a failed read can't overwrite the real capacity
+    const c = {hpd: {}, off: {}, team: {}, raw: {}, unread: !!failed, teamRaw: teamOff ? teamOff.daysOff || [] : [], etag: null};
+    if (failed) capWarnings.push(`${s.name}: capacity couldn't be read from Azure DevOps (${failed}). It shows as 0 hours, and capacity changes for this sprint won't be saved.`);
     for (const r of rows) {
       const m = r.teamMember || {}; if (!m.displayName) continue;
       c.hpd[m.displayName] = (r.activities || []).reduce((a, x) => a + (+x.capacityPerDay || 0), 0);
-      c.raw[m.displayName] = {id: m.id, activities: r.activities || []};
+      c.raw[m.displayName] = {id: m.id, activities: r.activities || [], daysOff: r.daysOff || []};
       const off = {}; rangesToDays(r.daysOff, days).forEach(d => { off[d] = 'full'; });
       if (Object.keys(off).length) c.off[m.displayName] = off;
     }
-    members.forEach(m => { if (c.hpd[m.name] == null) { c.hpd[m.name] = 0; c.raw[m.name] = {id: m.id, activities: []}; } });
-    rangesToDays(teamOff.daysOff, days).forEach(d => { c.team[d] = 'full'; });
+    members.forEach(m => { if (c.hpd[m.name] == null) { c.hpd[m.name] = 0; c.raw[m.name] = {id: m.id, activities: [], daysOff: []}; } });
+    rangesToDays(teamOff ? teamOff.daysOff : [], days).forEach(d => { c.team[d] = 'full'; });
     // partial days off kept by this extension
-    if (store) { try { const doc = await store.getDocument(PARTIAL, `${ctx.teamId}.${s.id}`);
+    if (store) { try { const doc = await store.getDocument(PARTIAL, `${ctx.teamId}.${s.id}`); c.etag = doc ? doc.__etag : null;
       for (const [who, map] of Object.entries((doc && doc.off) || {})) for (const [d, code] of Object.entries(map)) { if (!c.off[who] || c.off[who][d] !== 'full') (c.off[who] = c.off[who] || {})[d] = code; }
       for (const [d, code] of Object.entries((doc && doc.team) || {})) if (c.team[d] !== 'full') c.team[d] = code;
     } catch (e) { /* no document yet */ } }
     capacity[i] = c;
   });
   origCap = JSON.parse(JSON.stringify(capacity));
-  for (const c of Object.values(capacity)) delete c.raw;
+  for (const c of Object.values(capacity)) { delete c.raw; delete c.unread; delete c.teamRaw; delete c.etag; }
   D = {real: true, org: ctx.org, project: ctx.project, teamId: ctx.teamId, team: ctx.teamName, sprints, items, graph: {edges},
-    people: members.map(m => ({name: m.name})), capacity};
+    people: members.map(m => ({name: m.name})), capacity, capacityWarnings: capWarnings};
   step(`${items.length.toLocaleString()} work items, ${sprints.length} sprints, ${members.length} team members - ${calls} calls`);
   return D;
 }
@@ -229,17 +261,32 @@ const identity = name => { if (!name) return ''; const m = members.find(x => x.n
   const it = [...byId.values()].find(x => x.assignee === name && x.assigneeUnique); return it ? it.assigneeUnique : name; };
 const iterPath = sp => sp >= 0 ? sprints[sp].path : ctx.project;
 
+// A person's hours per day spread over their activities: the first activity takes the difference, the others keep
+// theirs. A total below what the others keep can't be saved as reviewed, so it's refused, not silently changed.
+function splitHours(raw, hpd) {
+  const acts = (raw.activities || []).map(a => ({name: a.name || '', capacityPerDay: +a.capacityPerDay || 0}));
+  if (!acts.length) return {acts: [{name: '', capacityPerDay: hpd}]};
+  const rest = acts.slice(1).reduce((a, x) => a + x.capacityPerDay, 0);
+  if (hpd < rest) return {acts, invalid: `${hpd} h/day is less than the ${rest} h/day kept for ${acts.slice(1).map(a => a.name || 'other activities').join(', ')}. ` +
+    `Set at least ${rest}, or change the activities on Azure DevOps' Capacity page.`};
+  acts[0].capacityPerDay = hpd - rest;
+  return {acts};
+}
 // What differs between the plan's capacity and what Azure DevOps has
 function capacityChanges(C) {
   const out = [];
   for (const [k, c] of Object.entries(C || {})) {
-    const i = +k, o = origCap[i]; if (!o || !c) continue;
+    const i = +k, o = origCap[i]; if (!o || !c || o.unread) continue;
     const days = dayList(sprints[i].start, sprints[i].finish);
     const full = (map, who) => days.filter(d => ((who ? (map[who] || {}) : map)[d]) === 'full').join(',');
     const part = (map, who) => JSON.stringify(Object.entries(who ? (map[who] || {}) : map).filter(([d, v]) => v !== 'full' && days.includes(d)).sort());
     for (const who of Object.keys(o.raw || {})) {
       const hpd = c.hpd[who] == null ? o.hpd[who] : c.hpd[who];
-      if (hpd !== o.hpd[who] || full(c.off, who) !== full(o.off, who)) out.push({sp: i, kind: 'member', who});
+      if (hpd !== o.hpd[who] || full(c.off, who) !== full(o.off, who)) {
+        const sp = splitHours(o.raw[who], hpd);
+        out.push({sp: i, kind: 'member', who, from: o.hpd[who], to: hpd, invalid: sp.invalid || '',
+          split: sp.acts.length > 1 ? sp.acts.map(a => `${a.name || 'no activity'} ${a.capacityPerDay}`).join(', ') : ''});
+      }
       if (part(c.off, who) !== part(o.off, who)) out.push({sp: i, kind: 'partial', who});
     }
     if (full(c.team) !== full(o.team)) out.push({sp: i, kind: 'team'});
@@ -265,8 +312,25 @@ async function save(plan) {
     }
     catch (e) { res.errors.push(`#${id} ${it.title}: ${(e.status === 400 || e.status === 409 || e.status === 412) && /\brev\b|test operation|changed/i.test(e.message) ? 'changed by someone else since you opened the hub - reload and try again' : e.message}`); }
   });
-  // 2. New tasks, linked to their story
+  // 2. New tasks, linked to their story. When an earlier create's outcome was unknown (connection dropped, 503), the
+  //    draft carries uncertainAt. Only those drafts are looked up first: an exact match (same story, title, owner,
+  //    hours and sprint, made by you since that attempt) counts as made; anything close but different stays
+  //    unresolved (res.ambiguous) until you choose: use that task, create a separate one (createAnyway), or drop the draft.
+  res.notes = []; res.uncertain = []; res.ambiguous = []; res.attemptAt = new Date().toISOString();
+  const unsure = plan.tasks.filter(t => t.uncertainAt && !t.createAnyway);
+  let made = new Map(), lookupFailed = '';
+  if (unsure.length) {
+    try { made = await tasksMadeSince([...new Set(unsure.map(t => t.parent))], new Date(Math.min(...unsure.map(t => Date.parse(t.uncertainAt))) - DAY).toISOString()); }
+    catch (e) { lookupFailed = e.message; }
+  }
   await pool(plan.tasks, 3, async (t, k) => {
+    if (t.uncertainAt && !t.createAnyway) {
+      if (lookupFailed) { res.errors.push(`"${t.title}" under #${t.parent}: an earlier attempt may have created it, and checking failed (${lookupFailed}), so it wasn't created again. Try again.`); return; }
+      const near = (made.get(t.parent) || []).filter(w => w.title === normTitle(t.title) && w.created >= Date.parse(t.uncertainAt) - 10 * 60e3);
+      const same = near.filter(w => w.who === (t.who || '') && w.hrs === (+t.hrs || 0) && w.iteration === iterPath(t.sp).toLowerCase());
+      if (near.length === 1 && same.length === 1) { res.saved.tasks.push(k); res.notes.push(`"${t.title}" under #${t.parent} was already made by the earlier attempt (#${same[0].id}), so it wasn't created again.`); return; }
+      if (near.length) { res.ambiguous.push({k, ids: near.map(w => w.id)}); return; }   // nothing created; the page asks what to do
+    }
     const st = byId.get(t.parent);
     const body = [
       {op: 'add', path: '/fields/System.Title', value: t.title},
@@ -275,32 +339,52 @@ async function save(plan) {
       {op: 'add', path: '/fields/Microsoft.VSTS.Scheduling.RemainingWork', value: t.hrs},
       {op: 'add', path: '/relations/-', value: {rel: 'System.LinkTypes.Hierarchy-Reverse', url: `${ctx.baseUrl}/_apis/wit/workItems/${t.parent}`}}];
     if (t.who) body.push({op: 'add', path: '/fields/System.AssignedTo', value: identity(t.who)});
-    try { await api(`${ctx.projUrl}/_apis/wit/workitems/$Task`, {method: 'POST', patch: true, body}); res.saved.tasks.push(k); }
-    catch (e) { res.errors.push(`New task "${t.title}": ${e.message}`); }
+    try {
+      const made = await api(`${ctx.projUrl}/_apis/wit/workitems/$Task`, {method: 'POST', patch: true, body});
+      if (!made || !made.id) throw Object.assign(new Error("Azure DevOps didn't say which task it created"), {uncertain: true});
+      res.saved.tasks.push(k);
+    }
+    catch (e) {
+      if (e.uncertain) { res.uncertain.push(k); res.errors.push(`New task "${t.title}": the connection dropped, or Azure DevOps' answer couldn't be read, so it may or may not have been created. Saving again checks for it first, so it won't be made twice.`); }
+      else res.errors.push(`New task "${t.title}": ${e.message}`);
+    }
   });
   // 3. Capacity: per person (hours per day and whole days off), team days off, partial days off
   const changes = capacityChanges(plan.capacity), store = changes.some(x => x.kind === 'partial') ? await extData() : null;
   let capOk = true;
+  const partialDone = new Set();
+  const conflict = () => Object.assign(new Error('changed in Azure DevOps since you opened the plan. Reload to see the new values, then make your change again.'), {conflict: true});
+  const norm = r => JSON.stringify({a: (r.activities || []).map(a => [a.name || '', +a.capacityPerDay || 0]), d: dayRanges(r.daysOff)});
   for (const ch of changes) {
     const s = sprints[ch.sp], c = plan.capacity[ch.sp], o = origCap[ch.sp], days = dayList(s.start, s.finish);
     const ranges = map => days.filter(d => map[d] === 'full').map(d => ({start: d + 'T00:00:00Z', end: d + 'T00:00:00Z'}));
     try {
       if (ch.kind === 'member') {
         const raw = o.raw[ch.who], hpd = c.hpd[ch.who] == null ? o.hpd[ch.who] : c.hpd[ch.who];
-        let acts = (raw.activities || []).map(a => ({name: a.name || '', capacityPerDay: +a.capacityPerDay || 0}));
-        if (!acts.length) acts = [{name: '', capacityPerDay: hpd}];
-        else { const rest = acts.slice(1).reduce((a, x) => a + x.capacityPerDay, 0); acts[0].capacityPerDay = Math.max(0, hpd - rest); }
+        const {acts, invalid} = splitHours(raw, hpd);
+        if (invalid) throw new Error(invalid);
+        const now = await api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/capacities/${raw.id}`).catch(e => { if (e.status === 404) return {}; throw e; });
+        if (norm(now) !== norm(raw)) throw conflict();
         await api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/capacities/${raw.id}`, {method: 'PATCH', body: {activities: acts, daysOff: ranges(c.off[ch.who] || {})}});
       }
-      else if (ch.kind === 'team') await api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/teamdaysoff`, {method: 'PATCH', body: {daysOff: ranges(c.team)}});
+      else if (ch.kind === 'team') {
+        const now = await api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/teamdaysoff`);
+        if (JSON.stringify(dayRanges(now.daysOff)) !== JSON.stringify(dayRanges(o.teamRaw))) throw conflict();
+        await api(`${teamUrl()}/_apis/work/teamsettings/iterations/${s.id}/teamdaysoff`, {method: 'PATCH', body: {daysOff: ranges(c.team)}});
+      }
       else if (ch.kind === 'partial') {
+        if (partialDone.has(ch.sp)) continue;   // one document per sprint holds everyone's partial days
+        partialDone.add(ch.sp);
         if (!store) throw new Error('extension storage is not available');
         const keep = map => Object.fromEntries(Object.entries(map || {}).filter(([d, v]) => v !== 'full' && days.includes(d)));
-        const doc = {id: `${ctx.teamId}.${s.id}`, __etag: -1, off: Object.fromEntries(Object.keys(o.raw).map(w => [w, keep(c.off[w])]).filter(([, m]) => Object.keys(m).length)), team: keep(c.team)};
-        await store.setDocument(PARTIAL, doc);
+        const doc = {id: `${ctx.teamId}.${s.id}`, off: Object.fromEntries(Object.keys(o.raw).map(w => [w, keep(c.off[w])]).filter(([, m]) => Object.keys(m).length)), team: keep(c.team)};
+        // the version read with the plan: if someone saved in between, this fails instead of replacing their days
+        try { const out = o.etag == null ? await store.createDocument(PARTIAL, doc) : await store.setDocument(PARTIAL, Object.assign(doc, {__etag: o.etag})); o.etag = out && out.__etag; }
+        catch (e) { throw /etag|conflict|exist|precondition/i.test(e.message || '') ? conflict() : e; }
       }
     }
-    catch (e) { capOk = false; res.errors.push(`Capacity for ${ch.who || 'the team'} in ${s.name}: ${e.message}`); }
+    catch (e) { capOk = false; res.errors.push(`Capacity for ${ch.kind === 'partial' ? 'partial days off' : ch.who || 'the team'} in ${s.name}: ${
+      e.status === 401 || e.status === 403 ? 'you don\'t have permission to change this team\'s capacity. A team or project admin can make the change or give you access.' : e.message}`); }
   }
   res.saved.capacity = capOk && changes.length > 0;
   return res;

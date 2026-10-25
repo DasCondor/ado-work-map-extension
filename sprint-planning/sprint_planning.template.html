@@ -353,6 +353,7 @@ section.view{display:none} section.view.on{display:block}
 
   <section class="view" id="v-capacity">
     <div class="intro"><span class="big">&#128197;</span><div><h2>1. Capacity check-in</h2><div class="sub">Everyone sets their hours per day and any time off in this sprint &mdash; a full day, half a day, or a few hours. Team-wide days off (holidays) apply to everyone. Capacity is what's left.</div></div></div>
+    <div class="card" id="capwarn" hidden style="border-color:var(--bad);color:var(--bad);margin-bottom:12px"></div>
     <div class="card capgrid" id="capgrid"></div>
     <div class="legend"><span style="--c:var(--accent)">Assigned work (task hours)</span><span style="--c:var(--stripe)">Estimated from points (no tasks yet)</span><span style="--c:var(--text)">Capacity line</span></div>
     <div class="card" id="cal1" style="margin-top:12px"></div>
@@ -364,7 +365,7 @@ section.view{display:none} section.view.on{display:block}
   </section>
 
   <section class="view" id="v-poker">
-    <div class="intro"><span class="big">&#127183;</span><div><h2>3. Planning poker</h2><div class="sub">Everyone picks a card in secret, then reveal. Close votes become the estimate; far-apart votes mean talk it through and vote again. Items without an estimate come first.</div></div></div>
+    <div class="intro"><span class="big">&#127183;</span><div><h2>3. Planning poker</h2><div class="sub">On one shared screen: each person picks a card (or tells the facilitator), then reveal. Votes aren't synced between computers. Close votes become the estimate; far-apart votes mean talk it through and vote again. Items without an estimate come first.</div></div></div>
     <div class="poker">
       <div class="card" id="pokerbody"></div>
       <div class="card"><h3>Up next</h3><div class="list" id="queue" style="max-height:520px"></div></div>
@@ -391,7 +392,7 @@ section.view{display:none} section.view.on{display:block}
   </section>
 
   <section class="view" id="v-commit">
-    <div class="intro"><span class="big">&#9995;</span><div><h2>5. Confidence vote</h2><div class="sub">Fist of five: how confident is each of you that the team can finish this plan? 1 = no way, 5 = easy. An average of 3.5 or more and you're committed.</div></div></div>
+    <div class="intro"><span class="big">&#9995;</span><div><h2>5. Confidence vote</h2><div class="sub">Fist of five, entered on this screen: how confident is each of you that the team can finish this plan? 1 = no way, 5 = easy. An average of 3.5 or more and you're committed.</div></div></div>
     <div class="poker"><div class="card fists" id="fists"></div><div class="card" id="verdict"></div></div>
     <div class="card" id="cal5" style="margin-top:12px"></div>
   </section>
@@ -1104,29 +1105,72 @@ try { setNav(localStorage.getItem('adomap.planning.nav') === 'min'); } catch (e)
 function pendingChanges() {
   const moves = Object.entries(P).map(([id, p]) => ({id: +id, sp: p.sp, who: p.who})).filter(m => { const it = byId.get(m.id); return it && (m.sp !== it.sp || m.who !== (it.assignee || '')); });
   const estimates = Object.entries(E).map(([id, v]) => ({id: +id, pts: v})).filter(x => byId.has(x.id) && byId.get(x.id).points !== x.pts);
-  const tasks = NT.map(t => { const st = byId.get(t.parent); return {parent: t.parent, title: t.title, who: t.who, hrs: t.hrs, sp: st ? planned(st).sp : -1}; });
+  const tasks = NT.map(t => { const st = byId.get(t.parent); return {parent: t.parent, title: t.title, who: t.who, hrs: t.hrs, sp: st ? planned(st).sp : -1, uncertainAt: t.uncertainAt, createAnyway: !!t.createAnyway}; });
   const cap = PAPI ? PAPI.capacityChanges(C) : [];
   return {moves, estimates, tasks, cap, count: moves.length + estimates.length + tasks.length + cap.length};
 }
-function refreshSaveButton() { if (!REAL) return; const n = pendingChanges().count; $('#saveplan').textContent = n ? `Save plan (${n})` : 'Save plan'; }
+// Preview: Save plan is off until someone turns it on for this project, in this browser, next to the button
+const SAVE_ON = KEY + '.saveOn';
+const saveOn = () => { try { return localStorage.getItem(SAVE_ON) === '1'; } catch (e) { return false; } };
+const PREVIEW_WARN = 'Not yet validated against a live Azure DevOps organization. Use a disposable or non-critical project.';
+function refreshSaveButton() { if (!REAL) return; const n = pendingChanges().count;
+  $('#saveplan').textContent = (n ? `Save plan (${n})` : 'Save plan') + (saveOn() ? '' : ' \u00b7 off');
+  $('#saveplan').title = saveOn() ? 'Write the plan\'s changes to Azure DevOps' : 'Save plan is off in this preview. Click to read why and turn it on.'; }
 function saveDialog(html) { $('#saveinner').innerHTML = html; $('#savebox').hidden = false; }
+// A task an earlier save may or may not have created, with similar but different tasks found: the user decides
+const decideHtml = t => `<div class="decide" data-draft="${t.id}" style="margin:6px 0">"${esc(t.title)}" under #${t.parent}: an earlier save may have created it. ` +
+  `${t.similar.map(i => `<a href="#" data-adoopen="${i}">#${i}</a>`).join(', ')} ${t.similar.length === 1 ? 'looks' : 'look'} similar but not the same.<br>` +
+  `${t.similar.map(i => `<button class="btn" data-decide="use" data-id="${i}">Use #${i}</button>`).join(' ')} <button class="btn" data-decide="new">Create a separate task</button> <button class="btn" data-decide="drop">Remove draft</button></div>`;
+const undecided = () => NT.filter(t => t.uncertainAt && (t.similar || []).length && !t.createAnyway);
+function dropDraft(id) {
+  NT = NT.filter(x => x.id !== id); save('newtasks', NT);
+  const tk = byId.get(id); if (!tk || !tk.isNewTask) return;
+  const st = byId.get(tk.parent); if (st) st.children = st.children.filter(x => x !== id);
+  byId.delete(id); D.items.splice(D.items.indexOf(tk), 1);
+}
 if (REAL) {
   $('#saveplan').hidden = false;
   $('#saveplan').onclick = () => {
+    if (!saveOn()) {
+      saveDialog(`<h3>Save plan is off in this preview</h3><p><b>${PREVIEW_WARN}</b></p>
+        <div class="sub">Until it's on, nothing is written to Azure DevOps: your plan is kept in this browser, and everything else works as usual. When it's on, every save still shows you each change first.</div>
+        <p><label><input type="checkbox" id="saveack"> I understand. Turn on Save plan for the ${esc(D.team || 'team')} team's plans, in this browser.</label></p>
+        <div class="acts"><button class="btn" id="savecancel">Keep it off</button><button class="btn primary" id="saveon" disabled>Turn on Save plan</button></div>`);
+      return;
+    }
     const ch = pendingChanges();
     if (!ch.count) { toast('Nothing to save - the plan matches Azure DevOps.'); return; }
-    const li = (n, what) => n ? `<li><b>${n}</b> ${what}</li>` : '';
+    const li = (n, what, rows) => n ? `<li><b>${n}</b> ${what}${rows ? `<div class="sub">${rows.slice(0, 8).join('<br>')}${rows.length > 8 ? `<br>and ${rows.length - 8} more` : ''}</div>` : ''}</li>` : '';
+    const nm = id => { const it = byId.get(id); return it ? `#${id} ${esc(it.title.slice(0, 60))}` : '#' + id; };
+    const spn = i => i >= 0 && D.sprints[i] ? esc(D.sprints[i].name) : 'backlog';
     saveDialog(`<h3>Save the plan to Azure DevOps?</h3><div class="sub">For the ${esc(D.team || 'team')} team. Everyone will see these changes.</div><ul>
-      ${li(ch.moves.length, 'stories moved between sprints or given a new owner')}${li(ch.estimates.length, 'new estimates')}
-      ${li(ch.tasks.length, 'new tasks, linked to their stories')}${li(ch.cap.length, 'capacity or days-off updates')}</ul>
-      <div class="sub">A story someone else changed since you opened the hub isn't overwritten - you'll be told which.</div>
+      ${li(ch.moves.length, 'stories moved between sprints or given a new owner', ch.moves.map(m => { const it = byId.get(m.id);
+        return `${nm(m.id)}: ${m.sp !== it.sp ? spn(it.sp) + ' &rarr; ' + spn(m.sp) : ''}${m.sp !== it.sp && m.who !== (it.assignee || '') ? ', ' : ''}${m.who !== (it.assignee || '') ? esc(it.assignee || 'unassigned') + ' &rarr; ' + esc(m.who || 'unassigned') : ''}`; }))}
+      ${li(ch.estimates.length, 'new estimates', ch.estimates.map(x => `${nm(x.id)}: ${byId.get(x.id).points ?? 'none'} &rarr; ${x.pts}`))}
+      ${li(ch.tasks.length, 'new tasks, linked to their stories', ch.tasks.map(t => `"${esc(t.title)}" under ${nm(t.parent)}`))}
+      ${li(ch.cap.length, 'capacity or days-off updates', ch.cap.map(x => `${spn(x.sp)}: ${x.kind === 'team' ? 'team days off' : x.kind === 'partial' ? esc(x.who || 'team') + ', partial days off'
+        : esc(x.who) + ', ' + (x.from !== x.to ? `${x.from} &rarr; ${x.to} h/day${x.split ? ` (${esc(x.split)})` : ''}` : 'days off') + (x.invalid ? ` <b style="color:var(--bad)">won't save:</b> ${esc(x.invalid)}` : '')}`))}</ul>
+      ${ch.cap.some(x => x.kind === 'partial') ? '<div class="sub">Partial days off (half days, hours) are kept by this extension only: Azure DevOps\' own Capacity page shows whole days.</div>' : ''}
+      ${(D.capacityWarnings || []).length ? `<div class="err">${D.capacityWarnings.map(esc).join('<br>')}</div>` : ''}
+      ${undecided().length ? `<div class="err"><b>Decide first:</b>${undecided().map(decideHtml).join('')}Until you choose, these drafts aren't created.</div>` : ''}
+      <div class="sub">A story, or a person's capacity, that someone else changed since you opened the hub isn't overwritten - you'll be told which.</div>
+      <div class="sub"><b>Preview:</b> ${PREVIEW_WARN} <a href="#" id="saveoff">Turn Save plan off</a></div>
       <div class="acts"><button class="btn" id="savecancel">Cancel</button><button class="btn primary" id="savego">Save</button></div>`);
   };
 }
 document.addEventListener('click', async e => {
   if (e.target.id === 'savecancel' || e.target.id === 'saveclose') { $('#savebox').hidden = true; if (e.target.id === 'saveclose') location.reload(); return; }
-  const ado = e.target.closest('[data-adoopen]'); if (ado && PAPI) { PAPI.openWorkItem(+ado.dataset.adoopen); return; }
-  if (e.target.id !== 'savego') return;
+  const ado = e.target.closest('[data-adoopen]'); if (ado && PAPI) { e.preventDefault(); PAPI.openWorkItem(+ado.dataset.adoopen); return; }
+  if (e.target.id === 'saveon') { try { localStorage.setItem(SAVE_ON, '1'); } catch (err) {} refreshSaveButton(); $('#saveplan').onclick(); return; }
+  if (e.target.id === 'saveoff') { e.preventDefault(); try { localStorage.removeItem(SAVE_ON); } catch (err) {} $('#savebox').hidden = true; refreshSaveButton(); toast('Save plan is off. Your plan stays in this browser.'); return; }
+  const dec = e.target.closest('[data-decide]');
+  if (dec) {
+    const box = dec.closest('[data-draft]'), t = NT.find(x => x.id === +box.dataset.draft); if (!t) return;
+    if (dec.dataset.decide === 'new') { delete t.uncertainAt; delete t.similar; t.createAnyway = true; save('newtasks', NT); box.textContent = `"${t.title}" will be created as a separate task when you save.`; }
+    else { dropDraft(t.id); box.textContent = dec.dataset.decide === 'use' ? `Using #${dec.dataset.id}: the draft was removed.` : `"${t.title}": the draft was removed.`; }
+    render(); return;
+  }
+  if (e.target.id !== 'savego' || !saveOn()) return;
   const ch = pendingChanges();
   e.target.disabled = true; e.target.textContent = 'Saving...';
   let res;
@@ -1134,15 +1178,21 @@ document.addEventListener('click', async e => {
   catch (err) { res = {saved: {moves: [], estimates: [], tasks: [], capacity: false}, errors: [err.message || String(err)]}; }
   // forget what was saved; keep anything that failed so it can be tried again
   res.saved.moves.forEach(id => delete P[id]); res.saved.estimates.forEach(id => delete E[id]);
+  // a draft whose create had an unknown outcome is marked, so the next save looks for it before creating it
+  (res.uncertain || []).forEach(k => { if (NT[k]) { NT[k].uncertainAt = res.attemptAt; delete NT[k].createAnyway; delete NT[k].similar; } });
+  (res.ambiguous || []).forEach(a => { if (NT[a.k]) NT[a.k].similar = a.ids; });   // stays unresolved until the user chooses
   NT = NT.filter((t, k) => !res.saved.tasks.includes(k));
   save('plan', P); save('est', E); save('newtasks', NT);
   if (res.saved.capacity && !res.errors.some(x => /^Capacity/.test(x))) { try { localStorage.removeItem(KEY + '.cap'); } catch (err) {} }
   const ok = res.saved.moves.length + res.saved.estimates.length + res.saved.tasks.length + (res.saved.capacity ? 1 : 0);
-  saveDialog(res.errors.length
-    ? `<h3>Saved with problems</h3><p>${ok ? 'Some changes were saved.' : 'Nothing could be saved.'} These need another look:</p><div class="err">${res.errors.map(x => `<div>&bull; ${esc(x)}</div>`).join('')}</div>
+  const decide = undecided();
+  saveDialog(res.errors.length || decide.length
+    ? `<h3>Saved with problems</h3><p>${ok ? 'Some changes were saved.' : 'Nothing could be saved.'} These need another look:</p><div class="err">${res.errors.map(x => `<div>&bull; ${esc(x)}</div>`).join('')}${decide.map(decideHtml).join('')}</div>
        <div class="acts"><button class="btn primary" id="saveclose">Reload from Azure DevOps</button></div>`
-    : `<h3>&#9989; Saved to Azure DevOps</h3><p>The plan is in Azure DevOps now. Reloading so you see it as everyone else does.</p><div class="acts"><button class="btn primary" id="saveclose">Reload</button></div>`);
+    : `<h3>&#9989; Saved to Azure DevOps</h3><p>The plan is in Azure DevOps now. Reloading so you see it as everyone else does.</p>${(res.notes || []).length ? `<div class="sub">${res.notes.map(esc).join('<br>')}</div>` : ''}<div class="acts"><button class="btn primary" id="saveclose">Reload</button></div>`);
 });
+if (REAL && (D.capacityWarnings || []).length) { $('#capwarn').hidden = false; $('#capwarn').innerHTML = D.capacityWarnings.map(esc).join('<br>'); }
+document.addEventListener('change', e => { if (e.target.id === 'saveack') $('#saveon').disabled = !e.target.checked; });
 const renderWithSave = render;
 render = function () { renderWithSave(); refreshSaveButton(); };
 

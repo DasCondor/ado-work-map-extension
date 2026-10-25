@@ -8,6 +8,7 @@ It's the same interactive report as the free [ADO Work Map PowerShell script](ht
 
 ## What's in it
 
+- **Needs attention** - unassigned, blocked, stale and stranded work, and stories missing an estimate, acceptance criteria or a parent, each with the evidence, dates and a link. Checks can be turned off.
 - **Delivery map** - Epic > Feature > Story > Task with accomplished / in progress / not started roll-ups, an epic list for big projects, collapse to any level, and progress over time.
 - **Sprints** - every sprint on a timeline, the detail of any sprint, velocity, and a features x sprints map.
 - **Changes** - what was created, completed, updated or moved in any time frame, plus a change log recorded between your visits.
@@ -35,8 +36,10 @@ A second hub, **Boards > Sprint planning**, runs sprint planning as a team meeti
 
 - **Capacity check-in** - each person's hours per day and days off from the team's capacity, plus half days or a few hours off, and team days off.
 - **Carry over** last sprint's unfinished work, **planning poker** with the story's description and acceptance criteria, and **people lanes or swimlanes** with assigned work against capacity.
-- Quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote.
+- Quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote (entered on one shared screen).
 - **Save plan** writes it all back: stories' sprint, owner and points, the new tasks, and capacity and days off. A story someone else changed meanwhile is never overwritten.
+
+> **Preview:** Save plan is off until you turn it on beside the button. Not yet validated against a live Azure DevOps organization. Use a disposable or non-critical project.
 
 ## Permissions
 
