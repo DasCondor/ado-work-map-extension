@@ -40,6 +40,7 @@ Epics, features, stories and tasks, every sprint, what changed, and how the work
 - **Changes** &mdash; what was created, completed, updated or moved in any time frame, and a change log between visits.
 - **Maps** &mdash; treemap, repo matrix and a commit heatmap (everyone or by person, any sprint), each narrowable to one sprint.
 - **Spider web** &mdash; work items and their links, with the PRs, commits, branches, builds and repos attached.
+- **Experimental** &mdash; eight new maps to try: feature readiness, people load, dependencies, work aging, forecast, sprint flow, PR flow and cross-team.
 
 <table>
 <tr>
@@ -92,7 +93,7 @@ Azure DevOps Services only (not Azure DevOps Server).
 
 ## Latest updates
 
-**1.5.1 (preview)**: the sprint names stay frozen at the top of the sprint map and sprint detail while you scroll, and the Needs attention **Checks** menu fits on screen. It builds on **1.5.0 (preview)**: a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
+**1.5.2 (preview)**: an **Experimental** tab with eight new maps (feature readiness, people load, dependencies, work aging, forecast, sprint flow, PR flow, cross-team), each with a foldable **How to read this map** box; a map that can't be drawn no longer affects the rest of the report. It builds on **1.5.0 (preview)**: a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
 
 Full notes for this release and every earlier one: **[UPDATES.md](UPDATES.md)**.
 
