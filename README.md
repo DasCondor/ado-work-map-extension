@@ -92,7 +92,7 @@ Azure DevOps Services only (not Azure DevOps Server).
 
 ## Latest updates
 
-**1.5.0 (preview)**: a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
+**1.5.1 (preview)**: the sprint names stay frozen at the top of the sprint map and sprint detail while you scroll, and the Needs attention **Checks** menu fits on screen. It builds on **1.5.0 (preview)**: a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
 
 Full notes for this release and every earlier one: **[UPDATES.md](UPDATES.md)**.
 
