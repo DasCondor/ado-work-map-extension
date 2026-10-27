@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "ado-work-map-boards",
   "publisher": "DasCondor",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "name": "ADO Work Map",
   "description": "Two hubs in Boards: a Work Map of epics to tasks, sprints, changes, repos and links, and Sprint planning as a team - capacity, days off, poker and a plan you can save back.",
   "public": false,

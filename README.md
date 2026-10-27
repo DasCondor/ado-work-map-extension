@@ -40,6 +40,7 @@ Epics, features, stories and tasks, every sprint, what changed, and how the work
 - **Changes** &mdash; what was created, completed, updated or moved in any time frame, and a change log between visits.
 - **Maps** &mdash; treemap, repo matrix and a commit heatmap (everyone or by person, any sprint), each narrowable to one sprint.
 - **Spider web** &mdash; work items and their links, with the PRs, commits, branches, builds and repos attached.
+- **Settings** &mdash; your status flows, swim lanes and story dates, shared by everyone in the project.
 - **Experimental** &mdash; eight new maps to try: feature readiness, people load, dependencies, work aging, forecast, sprint flow, PR flow and cross-team.
 
 <table>
@@ -93,7 +94,7 @@ Azure DevOps Services only (not Azure DevOps Server).
 
 ## Latest updates
 
-**1.5.2 (preview)**: an **Experimental** tab with eight new maps (feature readiness, people load, dependencies, work aging, forecast, sprint flow, PR flow, cross-team), each with a foldable **How to read this map** box; a map that can't be drawn no longer affects the rest of the report. It builds on **1.5.0 (preview)**: a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
+**1.6.0 (preview)**: a **Settings** tab for status flows, swim lanes and story dates, a **Lane** filter, and four new Needs attention checks (stuck, skipped a step, past its end date, no UAT task in the UAT lane). Sprint planning drafts UAT testing tasks. It builds on **1.5.0 (preview)**: a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
 
 Full notes for this release and every earlier one: **[UPDATES.md](UPDATES.md)**.
 

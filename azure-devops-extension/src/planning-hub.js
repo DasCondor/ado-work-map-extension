@@ -207,7 +207,7 @@ async function load() {
       id: w.id, rev: w.rev, type: t, kind: STORY_TYPES.includes(t) && t !== 'Bug' ? 'Story' : t, level: LEVELS[t] == null ? 2 : LEVELS[t],
       title: f['System.Title'] || '', state: f['System.State'] || '', bucket: bucket(t, f['System.State']),
       assignee: who ? who.displayName || '' : '', assigneeUnique: who ? who.uniqueName || '' : '',
-      iteration: f['System.IterationPath'] || '', area: f['System.AreaPath'] || '', tags: f['System.Tags'] || '',
+      iteration: f['System.IterationPath'] || '', area: f['System.AreaPath'] || '', tags: f['System.Tags'] || '', lane: f['System.BoardLane'] || '',
       points: pf ? f[pf] : null, pointsField: pf, remaining: f['Microsoft.VSTS.Scheduling.RemainingWork'] == null ? null : f['Microsoft.VSTS.Scheduling.RemainingWork'],
       descHtml: sanitize(f['System.Description'] || f['Microsoft.VSTS.TCM.ReproSteps'] || ''), acHtml: sanitize(f['Microsoft.VSTS.Common.AcceptanceCriteria'] || ''),
       parent, children: [], url: `${ctx.projUrl}/_workitems/edit/${w.id}`
@@ -250,7 +250,10 @@ async function load() {
   });
   origCap = JSON.parse(JSON.stringify(capacity));
   for (const c of Object.values(capacity)) { delete c.raw; delete c.unread; delete c.teamRaw; delete c.etag; }
-  D = {real: true, org: ctx.org, project: ctx.project, teamId: ctx.teamId, team: ctx.teamName, sprints, items, graph: {edges},
+  // The Work Map's team settings (its Settings tab): the UAT swim lane, so planning can draft UAT testing tasks
+  let settings = null;
+  try { const m = await extData(); const doc = m && await m.getDocument('report-settings', ctx.projectId); settings = doc && doc.settings || null; } catch (e) {}
+  D = {real: true, settings, org: ctx.org, project: ctx.project, teamId: ctx.teamId, team: ctx.teamName, sprints, items, graph: {edges},
     people: members.map(m => ({name: m.name})), capacity, capacityWarnings: capWarnings};
   step(`${items.length.toLocaleString()} work items, ${sprints.length} sprints, ${members.length} team members - ${calls} calls`);
   return D;

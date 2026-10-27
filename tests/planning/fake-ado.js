@@ -22,7 +22,7 @@
   const items = [
     item(100, 'Feature', 'Checkout', 'Active', 'Fabrikam', 'ana'),
     item(101, 'User Story', 'Pay with saved card', 'Active', 'Fabrikam\\Sprint 2', 'ana', {'Microsoft.VSTS.Scheduling.StoryPoints': 3}, [{rel: 'System.LinkTypes.Hierarchy-Reverse', url: WI(100)}]),
-    item(102, 'User Story', 'Refund to original card', 'New', 'Fabrikam', 'ben', {}, [{rel: 'System.LinkTypes.Hierarchy-Reverse', url: WI(100)}]),
+    item(102, 'User Story', 'Refund to original card', 'New', 'Fabrikam', 'ben', F.lane ? {'System.BoardLane': 'BA Review'} : {}, [{rel: 'System.LinkTypes.Hierarchy-Reverse', url: WI(100)}]),
     item(103, 'User Story', 'Receipt email', 'New', 'Fabrikam', 'chen', {'Microsoft.VSTS.Scheduling.StoryPoints': 5}, [{rel: 'System.LinkTypes.Hierarchy-Reverse', url: WI(100)}]),
     item(111, 'Task', 'Build API', 'Active', 'Fabrikam\\Sprint 2', 'ana', {'Microsoft.VSTS.Scheduling.RemainingWork': 6}, [{rel: 'System.LinkTypes.Hierarchy-Reverse', url: WI(101)}])
   ];

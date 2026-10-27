@@ -518,6 +518,11 @@ function addTaskItem(t) {
 NT.forEach(addTaskItem);
 const planned = it => P[it.id] || {sp: it.sp, who: it.assignee || ''};
 const pts = it => E[it.id] != null ? E[it.id] : it.points;
+// Stories in the UAT swim lane (set in the Work Map's Settings) need a UAT testing task; planning can draft it
+const UAT = (() => { const s = D.settings || {}; if (s.use && s.use.lane === false) return null;
+  return {lane: String(s.uat && s.uat.lane || 'BA Review'), title: String(s.uat && s.uat.title || 'UAT testing')}; })();
+const needsUat = st => !!UAT && !!st.lane && st.lane.toLowerCase() === UAT.lane.toLowerCase() && st.bucket !== 'done' &&
+  !tasksOf(st).some(t => t.title.toLowerCase().includes(UAT.title.toLowerCase()) || /\buat\b/i.test(t.title));
 
 // ---------- capacity: hours per day minus time off, over the sprint's working days ----------
 const OFF =[['', 'Working', '\u00b7'], ['1h', '1 hour off', '1h'], ['2h', '2 hours off', '2h'], ['3h', '3 hours off', '3h'], ['half', 'Half day off', '\u00bd'], ['5h', '5 hours off', '5h'], ['full', 'Full day off', 'Off']];
@@ -566,6 +571,7 @@ function issuesOf(it) {
   const out = [];
   if (pts(it) == null) out.push(['warn', 'No estimate']);
   if (!planned(it).who) out.push(['warn', 'Unassigned']);
+  if (needsUat(it)) out.push(['warn', `${it.lane}: no UAT task`]);
   for (const dep of needs.get(it.id) || []) { const d = byId.get(dep); if (!d || d.bucket === 'done') continue;
     const s = planned(d).sp; if (s < 0 || s > target) out.push(['bad', `Needs #${dep} first`]); else if (s === target) out.push(['warn', `Needs #${dep} (same sprint)`]); }
   return out;
@@ -578,7 +584,7 @@ function card(it, inPlan) {
     <div class="meta"><span class="pts${pts(it) == null ? ' none' : ''}">${pts(it) == null ? '?' : pts(it)}</span>
       <span>${hrs ? h1(hrs) + ' h in ' + tasksOf(it).length + ' task' + (tasksOf(it).length > 1 ? 's' : '') : 'no tasks yet'}</span>
       ${inPlan ? '' : `<span>${esc(planned(it).who || 'Unassigned')}</span>`}${f ? `<span>${esc(f.title.slice(0, 26))}</span>` : ''}
-      ${E[it.id] != null ? '<span class="tag new">estimated</span>' : ''}${it.sample ? '<span class="tag new">sample</span>' : ''}
+      ${it.lane ? `<span class="tag">${esc(it.lane)}</span>` : ''}${E[it.id] != null ? '<span class="tag new">estimated</span>' : ''}${it.sample ? '<span class="tag new">sample</span>' : ''}
       ${iss.map(([k, t]) => `<span class="tag ${k}">${esc(t)}</span>`).join('')}</div></div>`;
 }
 function setPlan(id, sp, who) {
@@ -744,7 +750,7 @@ function storyHtml(it, big) {
     ${d.acHtml != null ? `<div class="acx">${d.acHtml}</div>` : `<ol class="ac">${d.ac.map(a => `<li>${a}</li>`).join('')}</ol>`}
     <div class="sect">Details</div>
     <div class="sdet"><div><span>Type</span>${esc(it.type)}</div><div><span>State</span>${esc(it.state)}</div><div><span>Owner</span>${esc(pl.who || 'Unassigned')}</div>
-      <div><span>Feature</span>${esc(f ? f.title : '-')}</div><div><span>Epic</span>${esc(ep ? ep.title : '-')}</div><div><span>Area</span>${esc(it.area || '-')}</div>
+      <div><span>Feature</span>${esc(f ? f.title : '-')}</div><div><span>Epic</span>${esc(ep ? ep.title : '-')}</div><div><span>Area</span>${esc(it.area || '-')}</div>${it.lane ? `<div><span>Swim lane</span>${esc(it.lane)}</div>` : ''}
       <div><span>Planned for</span>${pl.sp >= 0 ? esc(SPR[pl.sp].name) : 'Backlog'}</div><div><span>Estimate</span>${pts(it) == null ? 'Not estimated' : pts(it) + ' pts'}</div>
       <div><span>Task hours</span>${ts.length ? h1(hrs) + ' h' : 'No tasks yet'}</div>${it.tags ? `<div><span>Tags</span>${esc(it.tags)}</div>` : ''}</div>
     ${ts.length ? `<div class="sect">Tasks</div><div class="tasks">${ts.map(t => `<span>${esc(t.title)} &middot; ${t.remaining} h${t.assignee ? ' &middot; ' + esc(t.assignee) : ''}</span>`).join('')}</div>` : ''}
@@ -754,6 +760,7 @@ function storyHtml(it, big) {
 const TASK_KINDS = {
   validation: {label: 'Validation', icon: '&#9989;', title: st => `Validate: ${st.title}`, hrs: 2},
   assist: {label: 'Assisting team member', icon: '&#129309;', title: st => `Assist ${(planned(st).who || 'the owner').split(' ')[0]}: ${st.title}`, hrs: 2},
+  uat: {label: 'UAT testing', icon: '&#129514;', title: st => `${UAT ? UAT.title : 'UAT testing'}: ${st.title}`, hrs: 2},
   custom: {label: 'Custom task', icon: '&#9998;', title: () => '', hrs: 4}
 };
 function suggestWho(st, kind) {
@@ -763,7 +770,7 @@ function suggestWho(st, kind) {
   return [...people].filter(p => kind === 'custom' || p !== owner).sort((a, b) => room(b) - room(a))[0] || owner || '';
 }
 function quickTaskHtml(st, kind) {
-  kind = kind || 'validation';
+  kind = kind || (needsUat(st) ? 'uat' : 'validation');
   const k = TASK_KINDS[kind], who = suggestWho(st, kind);
   return `<div class="qt" data-qt="${st.id}" data-kind="${kind}">
     <div class="qt-kinds">${Object.entries(TASK_KINDS).map(([key, v]) => `<button class="qt-k${key === kind ? ' on' : ''}" data-qtkind="${key}">${v.icon} ${v.label}</button>`).join('')}</div>
@@ -771,7 +778,7 @@ function quickTaskHtml(st, kind) {
     <div class="qt-row"><label class="sub">For <select class="qt-who">${people.map(p => `<option${p === who ? ' selected' : ''}>${esc(p)}</option>`).join('')}<option value="">Unassigned</option></select></label>
       <label class="sub">Hours <input type="number" class="qt-hrs" min="0" step="0.5" value="${k.hrs}"></label>
       <button class="btn primary" data-qtadd="${st.id}">Add task</button></div>
-    <div class="sub qt-note">${kind === 'validation' ? 'Someone other than the owner checks the acceptance criteria.' : kind === 'assist' ? 'Time a teammate spends helping the owner (pairing, reviews, answers).' : ''} Suggested: the teammate with the most free hours this sprint.</div></div>`;
+    <div class="sub qt-note">${kind === 'uat' ? `User acceptance testing${UAT ? ' for a story in the ' + esc(UAT.lane) + ' lane' : ''}.` : kind === 'validation' ? 'Someone other than the owner checks the acceptance criteria.' : kind === 'assist' ? 'Time a teammate spends helping the owner (pairing, reviews, answers).' : ''} Suggested: the teammate with the most free hours this sprint.</div></div>`;
 }
 let popId = null;
 // A look-alike of the Azure DevOps work item form. In a real extension this would open the actual form
@@ -807,6 +814,7 @@ function formHtml(it, meeting) {
     <div class="wif-side">
       <div class="wif-sec"><h4>Planning</h4><div class="wif-card wif-kv">
         <span>Story Points</span><b class="big">${pts(it) == null ? '&nbsp;' : pts(it)}</b>
+        ${it.lane ? `<span>Swim lane</span><b>${esc(it.lane)}</b>` : ''}
         ${REAL ? '' : `<span>Priority</span><b>${it.id % 3 + 1}</b>
         <span>Risk</span><b>${['1 - High', '2 - Medium', '3 - Low'][it.id % 3]}</b>`}
         <span>Remaining work</span><b>${ts.length ? h1(hrs) + ' h in ' + ts.length + ' task' + (ts.length > 1 ? 's' : '') : 'No tasks yet'}</b></div></div>
@@ -922,6 +930,8 @@ function renderBoard() {
     if (t > cp.cap * 1.05) out.push(['var(--bad)', `${esc(p)}: ${h1(t)} h of work, ${h1(cp.cap)} h available.`]);
     else if (cp.cap && t < cp.cap * .5) out.push(['var(--muted)', `${esc(p)} has room: ${h1(cp.cap - t)} h free.`]); });
   if ((w.get('') || {task: 0}).task) out.push(['var(--warn)', `${h1(w.get('').task)} h of tasks have no owner.`]);
+  const uatNeed = items.filter(needsUat);
+  if (uatNeed.length) out.push(['var(--warn)', `${uatNeed.length} stor${uatNeed.length === 1 ? 'y' : 'ies'} in the ${esc(UAT.lane)} lane ha${uatNeed.length === 1 ? 's' : 've'} no UAT testing task. <button class="btn" data-draftuat="1">Draft ${uatNeed.length === 1 ? 'it' : 'them'}</button>`]);
   items.forEach(it => issuesOf(it).forEach(([k, t]) => out.push([k === 'bad' ? 'var(--bad)' : 'var(--warn)', `#${it.id} ${esc(it.title.slice(0, 34))}: ${esc(t)}`])));
   $('#checks').innerHTML = out.length ? out.map(([c, t]) => `<div class="check"><span class="dot" style="--c:${c}"></span><span>${t}</span></div>`).join('') : '<div class="sub">&#9989; All clear.</div>';
 }
@@ -1012,6 +1022,11 @@ document.addEventListener('click', e => {
   else if (d.add) { const it = byId.get(+d.add); setPlan(it.id, target, planned(it).who); }
   else if (d.out) { const it = byId.get(+d.out); setPlan(it.id, -1, planned(it).who); }
   else if (d.open) { openStory(+d.open); if (d.focus === 'qt') { const q = document.querySelector('#mbox .qt'); if (q) { q.scrollIntoView({block: 'center'}); q.querySelector('.qt-title').focus(); } } }
+  else if (d.draftuat) {   // a UAT testing task for each story in the UAT lane without one; created on Save plan like any new task
+    const list = inSprint().filter(needsUat);
+    list.forEach(st => { const task = {id: Math.max(9800, ...NT.map(x => x.id + 1)), parent: st.id, title: TASK_KINDS.uat.title(st), who: suggestWho(st, 'uat'), hrs: TASK_KINDS.uat.hrs, kind: 'uat'};
+      while (byId.has(task.id)) task.id++; NT.push(task); addTaskItem(task); });
+    save('newtasks', NT); toast(`Drafted ${list.length} UAT testing task${list.length === 1 ? '' : 's'}. ${REAL ? 'They are created when you Save plan.' : ''}`); render(); }
   else if (d.qtkind) { const box = t.closest('.qt'), st = byId.get(+box.dataset.qt); box.outerHTML = quickTaskHtml(st, d.qtkind); }
   else if (d.qtadd) {
     const box = t.closest('.qt'), st = byId.get(+d.qtadd), title = box.querySelector('.qt-title').value.trim(), hrs = Math.max(0, +box.querySelector('.qt-hrs').value || 0);

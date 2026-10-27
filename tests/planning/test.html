@@ -152,6 +152,18 @@ const click = (w, sel) => { const b = w.document.querySelector(sel); if (b) b.cl
     ok(localStorage.getItem(LS + '.saveOn') === null && /off/.test(h.w.document.querySelector('#saveplan').textContent), 'and it can be turned off again');
     ok(calls('POST', /workitems\/\$Task$/).length === 0 && calls('PATCH', /./).length === 0, 'nothing was written while trying it');
 
+    // UAT: the Work Map's team settings name the UAT lane; a story in it without a UAT task gets one drafted
+    FAKE_STORE = {p1: {id: 'p1', settings: {uat: {lane: 'BA Review', title: 'UAT testing'}}, __etag: 1}};
+    h = await open({lane: true}, true);
+    const qtKind = () => { h.w.document.querySelectorAll('.step').forEach(x => { if (/Fill/.test(x.textContent)) x.click(); }); const o = h.w.document.querySelector('[data-open="102"]'); if (o) o.click(); const q = h.w.document.querySelector('#mbox .qt'); return q && q.dataset.kind; };
+    ok(h.D.items.find(i => i.id === 102).lane === 'BA Review' && qtKind() === 'uat', 'a story in the UAT lane with no UAT task: its Add a task form starts on UAT testing');
+    ok(/Swim lane\s*BA Review/.test(h.w.document.querySelector('#mbox').textContent), 'the story shows its swim lane');
+    click(h.w, '#mbox [data-qtadd]');
+    ok(drafts().some(t => t.parent === 102 && t.kind === 'uat' && /^UAT testing: /.test(t.title)) && qtKind() === 'validation', 'once it has a UAT task drafted, it is no longer flagged');
+    FAKE_STORE = {p1: {id: 'p1', settings: {use: {lane: false}}, __etag: 1}};
+    h = await open({lane: true}, true);
+    ok(qtKind() === 'validation', 'with Swim lane turned off in the settings, nothing is flagged');
+
     h = await open({fail103: true});
     r = await h.api.save({moves: [{id: 103, sp: 1, who: 'Chen Li'}], estimates: [], tasks: [], capacity: h.D.capacity});
     ok(r.errors.some(e => /#103.*changed by someone else/.test(e)), 'a story changed by someone else is reported, not overwritten');
