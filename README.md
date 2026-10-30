@@ -39,6 +39,7 @@ Epics, features, stories and tasks, every sprint, what changed, and how the work
 - **Sprints** &mdash; every sprint on a timeline, sprint detail, velocity and a sprint map.
 - **Changes** &mdash; what was created, completed, updated or moved in any time frame, and a change log between visits.
 - **Maps** &mdash; treemap, repo matrix and a commit heatmap (everyone or by person, any sprint), each narrowable to one sprint.
+- **Board** &mdash; open work laid out by swim lane and board column, with what's next in the BA Review lane (the lanes shown are set under Settings).
 - **Spider web** &mdash; work items and their links, with the PRs, commits, branches, builds and repos attached.
 - **Settings** &mdash; your status flows, swim lanes and story dates, shared by everyone in the project.
 - **Experimental** &mdash; eight new maps to try: feature readiness, people load, dependencies, work aging, forecast, sprint flow, PR flow and cross-team.
@@ -94,7 +95,7 @@ Azure DevOps Services only (not Azure DevOps Server).
 
 ## Latest updates
 
-**1.6.1 (preview)**: every Needs attention finding notes its swim lane (e.g. BA Review) and flow step. It builds on **1.6.0 (preview)**: a **Settings** tab for status flows, swim lanes and story dates, a **Lane** filter, and four new Needs attention checks (stuck, skipped a step, past its end date, no UAT task in the UAT lane). Sprint planning drafts UAT testing tasks. Earlier, **1.5.0 (preview)** added a **Needs attention** tab in the Work Map, clearer labels, and safer Sprint planning saves. In this preview **Save plan** is off until you turn it on beside the button: it's not yet validated against a live Azure DevOps organization, so use a disposable or non-critical project.
+**1.7.0 (preview)**: a **Board** tab lays open work out by swim lane and board column, with a **Next up** panel for the BA Review lane, and you choose which lanes show, and in what order, under **Settings**. It builds on **1.6.1 (preview)**: every Needs attention finding notes its swim lane and flow step. Sprint planning drafts UAT testing tasks. Earlier, **1.6.0 (preview)** added a **Settings** tab for status flows, swim lanes and story dates, a **Lane** filter and four new Needs attention checks, and **1.5.0 (preview)** added a **Needs attention** tab, a connection check (`-Check`, or **Check Connection** in VS Code), plain-language errors and clearer labels.
 
 Full notes for this release and every earlier one: **[UPDATES.md](UPDATES.md)**.
 
