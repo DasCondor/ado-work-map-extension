@@ -345,8 +345,17 @@ section.view{display:none} section.view.on{display:block}
   <span class="grow"></span>
   <div class="team" id="team" title="Who's ready for the next step - click someone to tick them"></div>
   <div class="timer" id="timer" title="Time left for this step">--:--</div>
+  <select id="tmode" title="This step's timer: count up (stopwatch) or count down from a set time" style="font-size:12px"><option value="stopwatch">Stopwatch</option><option value="timer">Timer</option></select>
+  <input type="number" id="tmin" min="1" max="180" title="Minutes for this step's timer" style="width:58px">
+  <button class="btn" id="msettings">Meeting settings</button>
   <button class="btn" id="tgo">Start</button>
   <button class="btn primary" id="next">Next step &rsaquo;</button>
+</div>
+<div class="card" id="mset" hidden style="margin:8px 0;max-width:760px">
+  <b>Meeting settings</b> <span class="sub">for this team</span>
+  <label style="display:block;margin:8px 0"><input type="checkbox" id="pset-poker"> <b>Planning poker</b> <span class="sub">each person votes on a story's estimate, on one shared screen</span></label>
+  <label style="display:block;margin:8px 0"><input type="checkbox" id="pset-fist"> <b>Confidence vote</b> <span class="sub">fist of five on the Commit page, before the plan is committed</span></label>
+  <p class="sub" style="margin:0">Both are off by default. With planning poker off, enter each story's points directly on the Estimate page.</p>
 </div>
 <main>
   <div class="kpis" id="kpis"></div>
@@ -365,7 +374,7 @@ section.view{display:none} section.view.on{display:block}
   </section>
 
   <section class="view" id="v-poker">
-    <div class="intro"><span class="big">&#127183;</span><div><h2>3. Planning poker</h2><div class="sub">On one shared screen: each person picks a card (or tells the facilitator), then reveal. Votes aren't synced between computers. Close votes become the estimate; far-apart votes mean talk it through and vote again. Items without an estimate come first.</div></div></div>
+    <div class="intro"><span class="big">&#127183;</span><div><h2 id="pokerh">3. Planning poker</h2><div class="sub" id="pokersub">On one shared screen: each person picks a card (or tells the facilitator), then reveal. Votes aren't synced between computers. Close votes become the estimate; far-apart votes mean talk it through and vote again. Items without an estimate come first.</div></div></div>
     <div class="poker">
       <div class="card" id="pokerbody"></div>
       <div class="card"><h3>Up next</h3><div class="list" id="queue" style="max-height:520px"></div></div>
@@ -392,7 +401,7 @@ section.view{display:none} section.view.on{display:block}
   </section>
 
   <section class="view" id="v-commit">
-    <div class="intro"><span class="big">&#9995;</span><div><h2>5. Confidence vote</h2><div class="sub">Fist of five, entered on this screen: how confident is each of you that the team can finish this plan? 1 = no way, 5 = easy. An average of 3.5 or more and you're committed.</div></div></div>
+    <div class="intro"><span class="big">&#9995;</span><div><h2 id="commith">5. Confidence vote</h2><div class="sub" id="commitsub">Fist of five, entered on this screen: how confident is each of you that the team can finish this plan? 1 = no way, 5 = easy. An average of 3.5 or more and you're committed.</div></div></div>
     <div class="poker"><div class="card fists" id="fists"></div><div class="card" id="verdict"></div></div>
     <div class="card" id="cal5" style="margin-top:12px"></div>
   </section>
@@ -412,6 +421,9 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&am
 const KEY = 'adomap.planning2.' + D.project + (D.teamId ? '.' + D.teamId : '');
 const load = (k, d) => { try { const v = localStorage.getItem(KEY + '.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 const save = (k, v) => { try { localStorage.setItem(KEY + '.' + k, JSON.stringify(v)); } catch (e) {} };
+// Meeting settings: votes are off by default; each step's timer is a stopwatch unless the team sets a countdown
+let PSET = Object.assign({poker: false, fist: false, timers: {}}, (REAL ? D.planning : load('planset', {})) || {});
+const savePlanSettings = () => { save('planset', PSET); if (REAL && window.PLANNING_API && window.PLANNING_API.savePlanning) window.PLANNING_API.savePlanning(PSET).catch(e => toast('Not saved: ' + (e && e.message || e))); };
 const toast = msg => { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2800); };
 const fmtDate = d => d ? new Date(d).toLocaleDateString(undefined, {month: 'short', day: 'numeric', timeZone: 'UTC'}) : '';
 const h1 = n => (Math.round(n * 10) / 10).toLocaleString();
@@ -595,16 +607,27 @@ function setPlan(id, sp, who) {
 
 // ---------- meeting: agenda, timer, team readiness ----------
 const STEPS = [['capacity', 'Capacity', 5], ['carry', 'Carry over', 5], ['poker', 'Estimate', 15], ['board', 'Fill the sprint', 15], ['commit', 'Commit', 5]];
-let timer = {left: STEPS[S.step][2] * 60, run: false, h: null};
+const stepTimer = i => { const t = (PSET.timers || {})[STEPS[i][0]] || {};
+  return {mode: t.mode === 'timer' ? 'timer' : 'stopwatch', min: Math.max(1, Math.min(180, +t.min || STEPS[i][2]))}; };
+let timer = {sec: 0, up: true, run: false, h: null};
+function resetTimer() { clearInterval(timer.h); const t = stepTimer(S.step); timer = {sec: t.mode === 'timer' ? t.min * 60 : 0, up: t.mode === 'stopwatch', run: false, h: null}; }
+resetTimer();
 function goStep(i) {
   S.step = Math.max(0, Math.min(STEPS.length - 1, i)); S.ready = {}; save('meeting', S);
-  timer.left = STEPS[S.step][2] * 60; tick(); render();
+  resetTimer(); tick(); render();
 }
-function tick() { const m = Math.floor(Math.abs(timer.left) / 60), s = Math.abs(timer.left) % 60;
-  $('#timer').textContent = (timer.left < 0 ? '+' : '') + m + ':' + String(s).padStart(2, '0'); $('#timer').classList.toggle('late', timer.left < 0);
-  $('#tgo').textContent = timer.run ? 'Pause' : 'Start'; }
-$('#tgo').onclick = () => { timer.run = !timer.run; clearInterval(timer.h); if (timer.run) timer.h = setInterval(() => { timer.left--; tick(); if (timer.left === 0) toast(`Time's up for ${STEPS[S.step][1]} - wrap up or take a minute more`); }, 1000); tick(); };
+function tick() { const a = Math.abs(timer.sec), m = Math.floor(a / 60), s = a % 60, late = !timer.up && timer.sec < 0, t = stepTimer(S.step);
+  $('#timer').textContent = (late ? '+' : '') + m + ':' + String(s).padStart(2, '0'); $('#timer').classList.toggle('late', late);
+  $('#timer').title = timer.up ? 'Time spent on this step' : 'Time left for this step';
+  $('#tgo').textContent = timer.run ? 'Pause' : 'Start';
+  $('#tmode').value = t.mode; $('#tmin').value = t.min; $('#tmin').hidden = t.mode !== 'timer'; }
+$('#tgo').onclick = () => { timer.run = !timer.run; clearInterval(timer.h); if (timer.run) timer.h = setInterval(() => { timer.sec += timer.up ? 1 : -1; tick(); if (!timer.up && timer.sec === 0) toast(`Time's up for ${STEPS[S.step][1]} - wrap up or take a minute more`); }, 1000); tick(); };
 $('#next').onclick = () => { if (S.step < STEPS.length - 1) goStep(S.step + 1); };
+const setStepTimer = (i, t) => { PSET.timers = Object.assign({}, PSET.timers, {[STEPS[i][0]]: t}); savePlanSettings(); };
+$('#tmode').onchange = e => { const c = stepTimer(S.step); setStepTimer(S.step, {mode: e.target.value, min: c.min}); resetTimer(); tick(); };
+$('#tmin').onchange = e => { const c = stepTimer(S.step); setStepTimer(S.step, {mode: c.mode, min: +e.target.value || c.min}); resetTimer(); tick(); };
+$('#msettings').onclick = () => { $('#mset').hidden = !$('#mset').hidden; $('#pset-poker').checked = !!PSET.poker; $('#pset-fist').checked = !!PSET.fist; };
+$('#mset').onchange = e => { if (e.target.id === 'pset-poker') PSET.poker = e.target.checked; else if (e.target.id === 'pset-fist') PSET.fist = e.target.checked; else return; savePlanSettings(); render(); };
 function renderMeeting() {
   $('#steps').innerHTML = STEPS.map(([k, label], i) => `<button class="step${i === S.step ? ' on' : ''}${i < S.step ? ' done' : ''}" data-step="${i}"><span class="n">${i < S.step ? '&#10003;' : i + 1}</span>${label}</button>`).join('');
   $('#team').innerHTML = people.map(p => `<span class="av" data-ready="${esc(p)}" style="--c:${colorOf(p)};cursor:pointer" title="${esc(p)}${S.ready[p] ? ' - ready' : ''}">${initials(p)}${S.ready[p] ? '<span class="ok">&#10003;</span>' : ''}</span>`).join('') +
@@ -852,6 +875,7 @@ function storyWindow(id) {
 
 // ---------- 3. planning poker ----------
 const DECK = [1, 2, 3, 5, 8, 13, 21, '?'];
+const POKER_SUB = $('#pokersub').innerHTML, COMMIT_SUB = $('#commitsub').innerHTML;
 let poker = {id: null, votes: {}, shown: false};
 const pokerQueue = () => D.items.filter(it => isStory(it) && it.bucket !== 'done' && (planned(it).sp === target || planned(it).sp < 0 || planned(it).sp > curIdx))
   .sort((a, b) => (pts(a) == null ? 0 : 1) - (pts(b) == null ? 0 : 1) || (planned(b).sp === target) - (planned(a).sp === target) || a.id - b.id);
@@ -860,6 +884,13 @@ function renderPoker() {
   $('#queue').innerHTML = q.map(it => `<div class="wi" data-pick="${it.id}" style="cursor:pointer;${it.id === poker.id ? 'outline:2px solid var(--accent)' : ''}"><span class="id">#${it.id}</span><span class="t">${esc(it.title)}</span><span class="pts${pts(it) == null ? ' none' : ''}">${pts(it) == null ? '?' : pts(it)}</span></div>`).join('');
   const it = byId.get(poker.id);
   if (!it) { $('#pokerbody').innerHTML = '<p class="sub">Nothing to estimate.</p>'; return; }
+  $('#pokersub').innerHTML = PSET.poker ? POKER_SUB : "Enter each story's estimate. Nobody votes: the points you save are the estimate.";
+  $('#pokerh').textContent = PSET.poker ? '3. Planning poker' : '3. Estimate';
+  if (!PSET.poker) { $('#pokerbody').innerHTML = `<div class="sub">#${it.id} &middot; ${esc(it.type)} &middot; ${esc((ancestor(it, 1) || {}).title || '')}${pts(it) != null ? ` &middot; currently ${pts(it)} pts` : ' &middot; not estimated'}</div>
+    <div class="story">${esc(it.title)}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><label class="sub">Estimate (points) <input type="number" id="est-in" min="0" step="1" value="${pts(it) != null ? pts(it) : ''}" style="width:90px"></label>
+      <button class="btn primary" data-entered="${it.id}">Save estimate</button><span class="grow"></span><button class="btn" id="skip">Next story</button></div>
+    <details open><summary class="sub" style="cursor:pointer">Story, acceptance criteria and details</summary>${storyHtml(it)}</details>`; return; }
   const votes = poker.votes, voted = people.filter(p => votes[p] != null), nums = voted.map(p => votes[p]).filter(v => v !== '?');
   let verdict = '';
   if (poker.shown && nums.length) {
@@ -939,16 +970,18 @@ function renderBoard() {
 // ---------- 5. confidence vote ----------
 function renderCommit() {
   renderCalendar($('#cal5'));
+  $('#commith').textContent = PSET.fist ? '5. Confidence vote' : '5. Commit';
+  $('#commitsub').innerHTML = PSET.fist ? COMMIT_SUB : 'Review the plan below and commit it. The confidence vote is off for this team.';
   const F = S.fist, voted = people.filter(p => F[p]), avg = voted.length ? voted.reduce((a, p) => a + F[p], 0) / voted.length : 0;
-  $('#fists').innerHTML = people.map(p => `<div class="fist">${av(p)}<span>${esc(p)}</span><div class="f5">${[1, 2, 3, 4, 5].map(n => `<button class="${F[p] === n ? 'on' : ''}" data-fist="${esc(p)}" data-n="${n}" title="${n}">${['', '&#9994;', '&#9757;', '&#9996;', '&#129311;', '&#9995;'][n]}</button>`).join('')}</div></div>`).join('') +
+  $('#fists').innerHTML = !PSET.fist ? '<p class="sub" style="margin:0">The confidence vote is off for this team. Turn it on under Meeting settings to vote before committing.</p>' : people.map(p => `<div class="fist">${av(p)}<span>${esc(p)}</span><div class="f5">${[1, 2, 3, 4, 5].map(n => `<button class="${F[p] === n ? 'on' : ''}" data-fist="${esc(p)}" data-n="${n}" title="${n}">${['', '&#9994;', '&#9757;', '&#9996;', '&#129311;', '&#9995;'][n]}</button>`).join('')}</div></div>`).join('') +
     `<div><button class="btn" id="simfist">Fill in the team's votes (demo)</button></div>`;
   const items = inSprint(), w = work(), wt = [...w.values()].reduce((a, r) => a + r.task + r.est, 0), capT = people.reduce((a, p) => a + capacity(p).cap, 0);
   const done = S.committed[target];
-  $('#verdict').innerHTML = `<div class="sub">Team confidence</div><div class="meter">${voted.length ? avg.toFixed(1) : '&ndash;'}<span class="sub"> / 5</span></div>
-    <div class="sub" style="text-align:center">${voted.length}/${people.length} voted</div>
+  $('#verdict').innerHTML = `${PSET.fist ? `<div class="sub">Team confidence</div><div class="meter">${voted.length ? avg.toFixed(1) : '&ndash;'}<span class="sub"> / 5</span></div>
+    <div class="sub" style="text-align:center">${voted.length}/${people.length} voted</div>` : ''}
     <p>${items.length} items &middot; ${items.reduce((a, it) => a + (+pts(it) || 0), 0)} pts &middot; ${h1(wt)} h of ${h1(capT)} h capacity</p>
     ${done ? `<p>&#127881; <b>Committed!</b> ${esc(SPR[target].name)} is planned. Export the changes to apply them in Azure DevOps.</p>` :
-      voted.length === people.length ? (avg >= 3.5 ? `<button class="btn primary" id="commit" style="width:100%">Commit to ${esc(SPR[target].name)} &#128640;</button>`
+      (!PSET.fist || voted.length === people.length) ? (!PSET.fist || avg >= 3.5 ? `<button class="btn primary" id="commit" style="width:100%">Commit to ${esc(SPR[target].name)} &#128640;</button>`
         : `<p>&#129300; Confidence is low. Go back to <a href="#" data-step="3">Fill the sprint</a>, take something out, and vote again.</p>`) : '<p class="sub">Waiting for everyone to vote.</p>'}`;
 }
 
@@ -1052,6 +1085,7 @@ document.addEventListener('click', e => {
   else if (t.id === 'skip') { nextPoker(); renderPoker(); }
   else if (t.id === 'simulate') { const it = byId.get(poker.id), base = pts(it) != null ? pts(it) : [2, 3, 5, 8][it.id % 4];
     people.forEach(p => { if (poker.votes[p] == null) { const i = DECK.indexOf(base) + Math.round((Math.random() - .5) * 1.6); poker.votes[p] = DECK[Math.max(0, Math.min(6, i))]; } }); renderPoker(); }
+  else if (d.entered) { const v = $('#est-in').value; if (v === '') { toast('Enter the points first.'); return; } E[+d.entered] = +v; save('est', E); toast(`#${d.entered} estimated at ${v} points`); nextPoker(); renderKpis(); renderPoker(); }
   else if (d.agree) { E[poker.id] = +d.agree; save('est', E); toast(`#${poker.id} estimated at ${d.agree} points`); nextPoker(); renderKpis(); renderPoker(); }
   else if (t.id === 'carryAll') { D.items.filter(it => isStory(it) && it.sp === target - 1 && it.bucket !== 'done').forEach(it => { P[it.id] = {sp: target, who: planned(it).who}; }); save('plan', P); render(); }
   else if (d.weekoff != null || d.teamweek != null) {

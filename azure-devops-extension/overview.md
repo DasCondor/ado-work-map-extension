@@ -35,8 +35,8 @@ Filters (search, epic, people, area path with a saved default, tags to include a
 A second hub, **Boards > Sprint planning**, runs sprint planning as a team meeting on your real sprints and work items:
 
 - **Capacity check-in** - each person's hours per day and days off from the team's capacity, plus half days or a few hours off, and team days off.
-- **Carry over** last sprint's unfinished work, **planning poker** with the story's description and acceptance criteria, and **people lanes or swimlanes** with assigned work against capacity.
-- Quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote (entered on one shared screen).
+- **Carry over** last sprint's unfinished work, an **Estimate** step with the story's description and acceptance criteria (**planning poker** is optional), and **people lanes or swimlanes** with assigned work against capacity.
+- Quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and an optional confidence vote (entered on one shared screen). Planning poker and the confidence vote are off by default: the Estimate page takes a typed estimate per story, and Commit goes straight to the commit button. Turn either on under **Meeting settings** for the team. Each step's timer is a stopwatch by default, or a countdown you set on that page.
 - **Save plan** writes it all back: stories' sprint, owner and points, the new tasks, and capacity and days off. A story someone else changed meanwhile is never overwritten.
 
 > **Preview:** Save plan is off until you turn it on beside the button. Not yet validated against a live Azure DevOps organization. Use a disposable or non-critical project.

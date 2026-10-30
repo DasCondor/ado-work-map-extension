@@ -253,7 +253,10 @@ async function load() {
   // The Work Map's team settings (its Settings tab): the UAT swim lane, so planning can draft UAT testing tasks
   let settings = null;
   try { const m = await extData(); const doc = m && await m.getDocument('report-settings', ctx.projectId); settings = doc && doc.settings || null; } catch (e) {}
-  D = {real: true, settings, org: ctx.org, project: ctx.project, teamId: ctx.teamId, team: ctx.teamName, sprints, items, graph: {edges},
+  // Meeting settings for this team (planning poker, confidence vote, step timers), saved per team
+  let planning = null;
+  try { const m = await extData(); const doc = m && await m.getDocument('planning-settings', ctx.teamId); planning = doc && doc.settings || null; } catch (e) {}
+  D = {real: true, settings, planning, org: ctx.org, project: ctx.project, teamId: ctx.teamId, team: ctx.teamName, sprints, items, graph: {edges},
     people: members.map(m => ({name: m.name})), capacity, capacityWarnings: capWarnings};
   step(`${items.length.toLocaleString()} work items, ${sprints.length} sprints, ${members.length} team members - ${calls} calls`);
   return D;
@@ -395,6 +398,12 @@ async function save(plan) {
 const spOf = it => { let p = (it.iteration || '').toLowerCase();
   for (;;) { const i = sprints.findIndex(s => s.path.toLowerCase() === p); if (i >= 0) return i; const k = p.lastIndexOf('\\'); if (k < 0) return -1; p = p.slice(0, k); } };
 
+async function savePlanning(p) {
+  const m = await extData(); if (!m) throw new Error('Meeting settings cannot be saved here.');
+  let cur = null; try { cur = await m.getDocument('planning-settings', ctx.teamId); } catch (e) {}
+  const doc = {id: ctx.teamId, settings: p};
+  if (cur) await m.setDocument('planning-settings', Object.assign(doc, {__etag: cur.__etag})); else await m.createDocument('planning-settings', doc);
+}
 async function openWorkItem(id) {
   try { (await SDK.getService('ms.vss-work-web.work-item-form-navigation-service')).openWorkItem(id, false); }
   catch (e) { window.open(`${ctx.projUrl}/_workitems/edit/${id}`, '_blank', 'noopener'); }
@@ -404,7 +413,7 @@ async function openWorkItem(id) {
 (async () => {
   try {
     const data = await load();
-    window.PLANNING_API = {save, capacityChanges, openWorkItem, team: ctx.teamName};
+    window.PLANNING_API = {save, capacityChanges, openWorkItem, savePlanning, team: ctx.teamName};
     $('#pl-loading').hidden = true;
     window.runPlanning(data);
   }

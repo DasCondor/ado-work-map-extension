@@ -25,7 +25,7 @@
 | Work Map report: Needs attention, delivery map, sprints, changes, maps, spider web | Supported | Supported | Supported |
 | Access | Read-only (PAT or `az login`) | Read-only (PAT in VS Code secret storage) | Your own sign-in; writes only from Sprint planning's **Save plan** |
 | Connection check | `-Check` | **Check Connection** command | Not needed (uses your sign-in) |
-| Sprint planning | &mdash; | &mdash; | Preview: **Save plan** is off until you turn it on (not yet validated against a live organization); votes are entered on one shared screen |
+| Sprint planning | &mdash; | &mdash; | Preview: **Save plan** is off until you turn it on (not yet validated against a live organization); poker and the confidence vote are off by default and can be turned on under **Meeting settings**; votes are entered on one shared screen |
 | Live demo | Sample data only | | |
 
 ## The hubs
@@ -53,7 +53,7 @@ Epics, features, stories and tasks, every sprint, what changed, and how the work
 
 ### Sprint planning
 
-Sprint planning run as a guided team meeting on your real sprints and work items: capacity check-in (hours per day, full / half / partial days off, team holidays, 1&ndash;5 week sprints), carry over, planning poker with the full story in a work item form, people lanes or swimlanes with assigned work against capacity, quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote. Votes are entered on one shared screen (the facilitator's), not synced between computers.
+Sprint planning run as a guided team meeting on your real sprints and work items: capacity check-in (hours per day, full / half / partial days off, team holidays, 1&ndash;5 week sprints), carry over, an Estimate step with the full story in a work item form (planning poker is optional, off by default), people lanes or swimlanes with assigned work against capacity, quick **Validation** and **Assisting team member** tasks, a sprint calendar with a capacity burn-up, and a confidence vote. Votes are entered on one shared screen (the facilitator's), not synced between computers.
 
 <img src="docs/images/sprint-planning.png" alt="Sprint planning: capacity check-in with time off per day for a 4-week sprint" width="900">
 

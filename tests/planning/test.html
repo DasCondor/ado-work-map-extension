@@ -164,6 +164,33 @@ const click = (w, sel) => { const b = w.document.querySelector(sel); if (b) b.cl
     h = await open({lane: true}, true);
     ok(qtKind() === 'validation', 'with Swim lane turned off in the settings, nothing is flagged');
 
+    // Meeting settings: votes are off by default; the Estimate and Commit pages stay in the meeting
+    FAKE_STORE = {};
+    h = await open({}, false);
+    ok(h.w.document.querySelectorAll('#steps .step').length === 5 && !!h.w.document.getElementById('v-poker') && !!h.w.document.getElementById('v-commit'), 'the Estimate and Commit pages stay in the meeting');
+    h.w.document.querySelector('[data-step="2"]').click();
+    ok(!!h.w.document.getElementById('est-in') && !h.w.document.getElementById('reveal'), 'Estimate has a number box, not planning poker, by default');
+    h.w.document.getElementById('est-in').value = '5';
+    h.w.document.querySelector('[data-entered]').click();
+    ok(JSON.parse(localStorage.getItem(LS + '.est') || '{}')[Object.keys(JSON.parse(localStorage.getItem(LS + '.est') || '{}'))[0]] === 5, 'a typed estimate is saved as the story estimate');
+    h.w.document.querySelector('[data-step="4"]').click();
+    ok(!h.w.document.querySelector('.fist') && !!h.w.document.getElementById('commit'), 'Commit has no confidence vote by default, and still commits');
+    h.w.document.querySelector('[data-step="0"]').click();
+    ok(h.w.document.getElementById('timer').textContent === '0:00' && h.w.document.getElementById('tmode').value === 'stopwatch', 'the timer is a stopwatch by default');
+    const tm = h.w.document.getElementById('tmode'); tm.value = 'timer'; tm.dispatchEvent(new Event('change'));
+    ok(h.w.document.getElementById('timer').textContent === '5:00' && !h.w.document.getElementById('tmin').hidden, 'a step can be a countdown timer, with minutes');
+    await wait(() => FAKE_STORE.t1 && FAKE_STORE.t1.settings && FAKE_STORE.t1.settings.timers);
+    ok(FAKE_STORE.t1.settings.timers.capacity.mode === 'timer' && FAKE_STORE.t1.settings.poker === false, 'the timer choice is saved for the team, and the votes stay off');
+    h = await open({}, true);
+    h.w.document.querySelector('[data-step="0"]').click();
+    ok(h.w.document.getElementById('tmode').value === 'timer', 'the saved timer choice is shown again');
+    FAKE_STORE.t1.settings.poker = true; FAKE_STORE.t1.settings.fist = true;
+    h = await open({}, true);
+    h.w.document.querySelector('[data-step="2"]').click();
+    ok(!!h.w.document.getElementById('reveal') && !h.w.document.getElementById('est-in'), 'with planning poker turned on for the team, Estimate runs the poker vote');
+    h.w.document.querySelector('[data-step="4"]').click();
+    ok(!!h.w.document.querySelector('.fist'), 'with the confidence vote turned on, Commit shows the fist of five');
+
     h = await open({fail103: true});
     r = await h.api.save({moves: [{id: 103, sp: 1, who: 'Chen Li'}], estimates: [], tasks: [], capacity: h.D.capacity});
     ok(r.errors.some(e => /#103.*changed by someone else/.test(e)), 'a story changed by someone else is reported, not overwritten');
